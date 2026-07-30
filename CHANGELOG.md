@@ -2,6 +2,16 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [0.1.2] - 2026-07-30
+
+### Fixed
+
+- **JSR execution now includes the Python harness.** A generated TypeScript
+  module carries its source and `python3 -c` executes it, rather than treating
+  a JSR module URL as a local filesystem path. `build123d_execute` and
+  `build123d_export` therefore work from the published package as well as from
+  a source checkout.
+
 ## [0.1.0] - 2026-07-30
 
 Initial release.

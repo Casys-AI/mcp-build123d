@@ -9,6 +9,8 @@
  * @module lib/cad/api/python-bridge
  */
 
+import { HARNESS_SOURCE } from "./harness-source.ts";
+
 /** Raised when the Python interpreter cannot be found. */
 export class PythonNotFoundError extends Error {
   constructor(interpreter: string) {
@@ -65,8 +67,6 @@ interface HarnessResponse {
   traceback?: string | null;
 }
 
-const HARNESS_PATH = new URL("./harness.py", import.meta.url).pathname;
-
 /** Python interpreter — override with BUILD123D_PYTHON_BIN. */
 function pythonBin(): string {
   return Deno.env.get("BUILD123D_PYTHON_BIN") ?? "python3";
@@ -81,7 +81,11 @@ function pythonBin(): string {
  */
 export async function runCadScript(
   script: string,
-  options?: { densityKgM3?: number; exports?: ExportSpec[]; timeoutMs?: number },
+  options?: {
+    densityKgM3?: number;
+    exports?: ExportSpec[];
+    timeoutMs?: number;
+  },
 ): Promise<HarnessResult> {
   const timeoutMs = options?.timeoutMs ?? 60_000;
   const interpreter = pythonBin();
@@ -89,13 +93,18 @@ export async function runCadScript(
   let child;
   try {
     child = new Deno.Command(interpreter, {
-      args: [HARNESS_PATH],
+      // A JSR module's `import.meta.url` is an HTTPS URL, not a local path.
+      // The generated TS module carries the harness source in the package
+      // graph, so `-c` never needs to know Deno's cache-file location.
+      args: ["-c", HARNESS_SOURCE],
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
     }).spawn();
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) throw new PythonNotFoundError(interpreter);
+    if (e instanceof Deno.errors.NotFound) {
+      throw new PythonNotFoundError(interpreter);
+    }
     throw e;
   }
 

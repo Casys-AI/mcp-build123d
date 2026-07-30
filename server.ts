@@ -42,7 +42,7 @@ async function main() {
 
   const server = new ConcurrentMCPServer({
     name: "mcp-build123d",
-    version: "0.1.1",
+    version: "0.1.2",
     maxConcurrent: 4,
     backpressureStrategy: "queue",
     validateSchema: true,
