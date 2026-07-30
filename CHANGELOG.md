@@ -16,3 +16,9 @@ Initial release.
 ### Notes
 
 - The script contract is one convention: assign the final shape to a variable named `result`. Violations fail with the list of variables the script actually defined.
+
+## [0.1.1] - 2026-07-30
+
+### Security
+
+- **HTTP mode binds to loopback by default.** This server executes arbitrary Python by design; exposing it on the network (`--hostname=0.0.0.0`) is now an explicit choice, not the default.

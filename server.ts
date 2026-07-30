@@ -36,13 +36,13 @@ async function main() {
   const portArg = args.find((arg) => arg.startsWith("--port="));
   const httpPort = portArg ? parseInt(portArg.split("=")[1], 10) : DEFAULT_HTTP_PORT;
   const hostnameArg = args.find((arg) => arg.startsWith("--hostname="));
-  const hostname = hostnameArg ? hostnameArg.split("=")[1] : "0.0.0.0";
+  const hostname = hostnameArg ? hostnameArg.split("=")[1] : "127.0.0.1"; // loopback by default — these tools execute code; exposing them is an explicit choice
 
   const toolsClient = new CadToolsClient(categories ? { categories } : undefined);
 
   const server = new ConcurrentMCPServer({
     name: "mcp-build123d",
-    version: "0.1.0",
+    version: "0.1.1",
     maxConcurrent: 4,
     backpressureStrategy: "queue",
     validateSchema: true,
