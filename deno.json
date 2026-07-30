@@ -1,0 +1,39 @@
+{
+  "name": "@casys/mcp-cad",
+  "version": "0.1.0",
+  "minimumDependencyAge": "0",
+  "tasks": {
+    "serve": "deno run --allow-all server.ts --http --port=3014",
+    "compile": "deno compile -A --output mcp-cad server.ts",
+    "test": "deno test --allow-all tests/"
+  },
+  "exports": {
+    ".": "./mod.ts",
+    "./server": "./server.ts"
+  },
+  "publish": {
+    "include": [
+      "mod.ts",
+      "server.ts",
+      "src/**/*.ts",
+      "src/api/harness.py",
+      "README.md",
+      "LICENSE"
+    ],
+    "exclude": [
+      "**/*_test.ts",
+      "**/*.test.ts",
+      "**/*.bench.ts"
+    ]
+  },
+  "imports": {
+    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.22.0",
+    "ajv": "npm:ajv@^8.17.1",
+    "hono": "npm:hono@^4",
+    "hono/cors": "npm:hono@^4/cors",
+    "jose": "npm:jose@^6.0.0",
+    "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
+    "@std/yaml": "jsr:@std/yaml@^1",
+    "@std/assert": "jsr:@std/assert@^1"
+  }
+}
