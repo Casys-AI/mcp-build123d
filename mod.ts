@@ -1,5 +1,5 @@
 /**
- * @casys/mcp-cad
+ * @casys/mcp-build123d
  *
  * MCP tools for parametric CAD as code, over build123d (Python, OCCT
  * kernel). Execute a script, get exact analytical geometry metrics, export

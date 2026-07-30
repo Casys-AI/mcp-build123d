@@ -1,10 +1,10 @@
 {
-  "name": "@casys/mcp-cad",
+  "name": "@casys/mcp-build123d",
   "version": "0.1.0",
   "minimumDependencyAge": "0",
   "tasks": {
     "serve": "deno run --allow-all server.ts --http --port=3014",
-    "compile": "deno compile -A --output mcp-cad server.ts",
+    "compile": "deno compile -A --output mcp-build123d server.ts",
     "test": "deno test --allow-all tests/"
   },
   "exports": {

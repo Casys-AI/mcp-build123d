@@ -1,8 +1,8 @@
 /**
  * CAD execution tools
  *
- * `cad_execute` runs a build123d script and reports exact geometry metrics.
- * `cad_export` additionally writes STEP / STL / GLTF files — STEP is the
+ * `build123d_execute` runs a build123d script and reports exact geometry metrics.
+ * `build123d_export` additionally writes STEP / STL / GLTF files — STEP is the
  * entry point of any FEA chain (Gmsh, CalculiX), GLB feeds 3D viewers.
  *
  * Both tools execute arbitrary Python by design: CAD-as-code means the
@@ -21,7 +21,7 @@ const SCRIPT_DESCRIPTION =
 
 /** Directory exports are written into — never anywhere else. */
 function exportDir(): string {
-  return Deno.env.get("CAD_EXPORT_DIR") ?? `${Deno.cwd()}/cad-exports`;
+  return Deno.env.get("BUILD123D_EXPORT_DIR") ?? `${Deno.cwd()}/cad-exports`;
 }
 
 /**
@@ -35,7 +35,7 @@ function sanitizeBasename(name: string): string {
   const safe = stem.replace(/[^a-zA-Z0-9._-]/g, "_");
   if (!safe || /^\.+$/.test(safe)) {
     throw new Error(
-      `[cad_export] File name '${name}' reduces to nothing safe. ` +
+      `[build123d_export] File name '${name}' reduces to nothing safe. ` +
         `Use letters, digits, dots, dashes and underscores.`,
     );
   }
@@ -50,7 +50,7 @@ const EXTENSIONS: Record<ExportSpec["format"], string> = {
 
 export const executeTools: CadTool[] = [
   {
-    name: "cad_execute",
+    name: "build123d_execute",
     description:
       "Execute a build123d (Python) script and return exact geometry metrics " +
       "computed analytically by the OCCT kernel: volume, surface area, " +
@@ -87,15 +87,15 @@ export const executeTools: CadTool[] = [
   },
 
   {
-    name: "cad_export",
+    name: "build123d_export",
     description:
       "Execute a build123d script and export the resulting shape. Formats: " +
       "'step' (exact BREP — the input for FEA meshing and other CAD tools), " +
       "'stl' (triangle mesh for 3D printing), 'gltf' (binary .glb for 3D " +
-      "viewers). Files are written under CAD_EXPORT_DIR (default " +
+      "viewers). Files are written under BUILD123D_EXPORT_DIR (default " +
       "./cad-exports); the file name is reduced to a safe basename and the " +
       "extension is imposed by the format. Also returns the same metrics as " +
-      "cad_execute — the script runs once for both.",
+      "build123d_execute — the script runs once for both.",
     category: "execute",
     inputSchema: {
       type: "object",

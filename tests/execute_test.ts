@@ -21,10 +21,10 @@ with BuildPart() as p:
 result = p
 `;
 
-// ── cad_execute ─────────────────────────────────────────────────────────────
+// ── build123d_execute ─────────────────────────────────────────────────────────────
 
-Deno.test("cad_execute - exact analytical metrics for a known box", async () => {
-  const metrics = await getHandler("cad_execute")({
+Deno.test("build123d_execute - exact analytical metrics for a known box", async () => {
+  const metrics = await getHandler("build123d_execute")({
     script: BOX_SCRIPT,
   }) as Record<string, unknown>;
 
@@ -38,14 +38,14 @@ Deno.test("cad_execute - exact analytical metrics for a known box", async () => 
   assertAlmostEquals(size[2], 5, 1e-9);
 });
 
-Deno.test("cad_execute - mass appears only with an explicit density", async () => {
-  const without = await getHandler("cad_execute")({
+Deno.test("build123d_execute - mass appears only with an explicit density", async () => {
+  const without = await getHandler("build123d_execute")({
     script: BOX_SCRIPT,
   }) as Record<string, unknown>;
   // No density → no mass at all. Never guessed from anything.
   assertEquals("mass_kg" in without, false);
 
-  const withDensity = await getHandler("cad_execute")({
+  const withDensity = await getHandler("build123d_execute")({
     script: BOX_SCRIPT,
     density_kg_m3: 2700,
   }) as Record<string, unknown>;
@@ -53,10 +53,10 @@ Deno.test("cad_execute - mass appears only with an explicit density", async () =
   assertAlmostEquals(withDensity.mass_kg as number, 0.0027, 1e-9);
 });
 
-Deno.test("cad_execute - a script without 'result' fails naming the defined variables", async () => {
+Deno.test("build123d_execute - a script without 'result' fails naming the defined variables", async () => {
   await assertRejects(
     async () =>
-      await getHandler("cad_execute")({
+      await getHandler("build123d_execute")({
         script: "from build123d import *\nsomething = 42\n",
       }),
     CadExecutionError,
@@ -64,10 +64,10 @@ Deno.test("cad_execute - a script without 'result' fails naming the defined vari
   );
 });
 
-Deno.test("cad_execute - a raising script reports the Python exception", async () => {
+Deno.test("build123d_execute - a raising script reports the Python exception", async () => {
   await assertRejects(
     async () =>
-      await getHandler("cad_execute")({
+      await getHandler("build123d_execute")({
         script: "raise ValueError('boom from user script')",
       }),
     CadExecutionError,
@@ -75,22 +75,22 @@ Deno.test("cad_execute - a raising script reports the Python exception", async (
   );
 });
 
-Deno.test("cad_execute - a non-geometric result is a clear error", async () => {
+Deno.test("build123d_execute - a non-geometric result is a clear error", async () => {
   await assertRejects(
     async () =>
-      await getHandler("cad_execute")({ script: "result = 42" }),
+      await getHandler("build123d_execute")({ script: "result = 42" }),
     CadExecutionError,
     "no geometry",
   );
 });
 
-// ── cad_export ──────────────────────────────────────────────────────────────
+// ── build123d_export ──────────────────────────────────────────────────────────────
 
-Deno.test("cad_export - writes the requested formats and returns metrics", async () => {
+Deno.test("build123d_export - writes the requested formats and returns metrics", async () => {
   const dir = await Deno.makeTempDir({ prefix: "cad-test-" });
-  Deno.env.set("CAD_EXPORT_DIR", dir);
+  Deno.env.set("BUILD123D_EXPORT_DIR", dir);
   try {
-    const result = await getHandler("cad_export")({
+    const result = await getHandler("build123d_export")({
       script: BOX_SCRIPT,
       formats: ["step", "gltf"],
       name: "box",
@@ -106,16 +106,16 @@ Deno.test("cad_export - writes the requested formats and returns metrics", async
     }
     assertAlmostEquals(result.metrics.volume_mm3 as number, 1000, 1e-6);
   } finally {
-    Deno.env.delete("CAD_EXPORT_DIR");
+    Deno.env.delete("BUILD123D_EXPORT_DIR");
     await Deno.remove(dir, { recursive: true });
   }
 });
 
-Deno.test("cad_export - path traversal in the name is neutralised", async () => {
+Deno.test("build123d_export - path traversal in the name is neutralised", async () => {
   const dir = await Deno.makeTempDir({ prefix: "cad-test-" });
-  Deno.env.set("CAD_EXPORT_DIR", dir);
+  Deno.env.set("BUILD123D_EXPORT_DIR", dir);
   try {
-    const result = await getHandler("cad_export")({
+    const result = await getHandler("build123d_export")({
       script: BOX_SCRIPT,
       formats: ["stl"],
       name: "../../etc/passwd",
@@ -124,15 +124,15 @@ Deno.test("cad_export - path traversal in the name is neutralised", async () => 
     // Directory components are stripped; the file lands inside the export dir.
     assertEquals(result.files[0].path, `${dir}/passwd.stl`);
   } finally {
-    Deno.env.delete("CAD_EXPORT_DIR");
+    Deno.env.delete("BUILD123D_EXPORT_DIR");
     await Deno.remove(dir, { recursive: true });
   }
 });
 
-Deno.test("cad_export - a name that reduces to nothing is rejected", async () => {
+Deno.test("build123d_export - a name that reduces to nothing is rejected", async () => {
   await assertRejects(
     async () =>
-      await getHandler("cad_export")({
+      await getHandler("build123d_export")({
         script: BOX_SCRIPT,
         formats: ["stl"],
         name: "../..",

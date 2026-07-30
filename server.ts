@@ -6,7 +6,7 @@
  *   "mcpServers": {
  *     "cad": {
  *       "command": "deno",
- *       "args": ["run", "--allow-all", "jsr:@casys/mcp-cad/server"]
+ *       "args": ["run", "--allow-all", "jsr:@casys/mcp-build123d/server"]
  *     }
  *   }
  * }
@@ -15,8 +15,8 @@
  *   deno run --allow-all server.ts --http --port=3014
  *
  * Environment:
- *   CAD_PYTHON_BIN   Python interpreter with build123d (default: python3)
- *   CAD_EXPORT_DIR   Where cad_export writes files (default: ./cad-exports)
+ *   BUILD123D_PYTHON_BIN   Python interpreter with build123d (default: python3)
+ *   BUILD123D_EXPORT_DIR   Where build123d_export writes files (default: ./cad-exports)
  *
  * @module lib/cad/server
  */
@@ -41,12 +41,12 @@ async function main() {
   const toolsClient = new CadToolsClient(categories ? { categories } : undefined);
 
   const server = new ConcurrentMCPServer({
-    name: "mcp-cad",
+    name: "mcp-build123d",
     version: "0.1.0",
     maxConcurrent: 4,
     backpressureStrategy: "queue",
     validateSchema: true,
-    logger: (msg) => console.error(`[mcp-cad] ${msg}`),
+    logger: (msg) => console.error(`[mcp-build123d] ${msg}`),
   });
 
   server.registerTools(toolsClient.toMCPFormat(), toolsClient.buildHandlersMap());
@@ -57,24 +57,24 @@ async function main() {
       hostname,
       cors: true,
       onListen: (info) => {
-        console.error(`[mcp-cad] HTTP server listening on http://${info.hostname}:${info.port}`);
+        console.error(`[mcp-build123d] HTTP server listening on http://${info.hostname}:${info.port}`);
       },
     });
-    console.error(`[mcp-cad] Server ready (${toolsClient.count} tools) - HTTP mode`);
+    console.error(`[mcp-build123d] Server ready (${toolsClient.count} tools) - HTTP mode`);
   } else {
     await server.start();
-    console.error(`[mcp-cad] Server ready (${toolsClient.count} tools) - stdio mode`);
+    console.error(`[mcp-build123d] Server ready (${toolsClient.count} tools) - stdio mode`);
   }
 
   Deno.addSignalListener("SIGINT", () => {
-    console.error("[mcp-cad] Shutting down...");
+    console.error("[mcp-build123d] Shutting down...");
     Deno.exit(0);
   });
 }
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error("[mcp-cad] Fatal error:", error);
+    console.error("[mcp-build123d] Fatal error:", error);
     Deno.exit(1);
   });
 }

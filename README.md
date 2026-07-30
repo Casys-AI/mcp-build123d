@@ -1,13 +1,13 @@
-# @casys/mcp-cad
+# @casys/mcp-build123d
 
 MCP server for **parametric CAD as code** — [build123d](https://github.com/gumyr/build123d) (Python, Open CASCADE kernel) driven by AI agents. **2 tools**: execute a script and read exact geometry metrics, export STEP / STL / GLTF.
 
 ```
 agent writes build123d script
         │
-   cad_execute ──► volume, mass, center of gravity, bbox   (OCCT, analytical)
+   build123d_execute ──► volume, mass, center of gravity, bbox   (OCCT, analytical)
         │
-   cad_export  ──► part.step   → FEA meshing (Gmsh, CalculiX), other CAD
+   build123d_export  ──► part.step   → FEA meshing (Gmsh, CalculiX), other CAD
                    part.stl    → 3D printing
                    part.glb    → 3D viewers
 ```
@@ -20,10 +20,10 @@ The metrics are not estimates. Volume, surface area, center of mass and bounding
 
 ## Security model — read this
 
-`cad_execute` and `cad_export` run **arbitrary Python** on the machine hosting this server. That is the point (CAD-as-code), not an accident. Consequences:
+`build123d_execute` and `build123d_export` run **arbitrary Python** on the machine hosting this server. That is the point (CAD-as-code), not an accident. Consequences:
 
 - Only expose this server to callers you trust with shell-equivalent access.
-- Exports are confined to `CAD_EXPORT_DIR`: file names are reduced to a safe basename (directory components stripped, extension imposed by the format), so a script cannot choose where files land — but the Python it contains can do anything Python can.
+- Exports are confined to `BUILD123D_EXPORT_DIR`: file names are reduced to a safe basename (directory components stripped, extension imposed by the format), so a script cannot choose where files land — but the Python it contains can do anything Python can.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ No account, no API key, no network access at runtime.
   "mcpServers": {
     "cad": {
       "command": "deno",
-      "args": ["run", "--allow-all", "jsr:@casys/mcp-cad/server"]
+      "args": ["run", "--allow-all", "jsr:@casys/mcp-build123d/server"]
     }
   }
 }
@@ -55,7 +55,7 @@ deno task serve      # port 3014
 
 ## Tools (2)
 
-### `cad_execute`
+### `build123d_execute`
 
 Runs a build123d script, returns exact metrics. The script must assign its final shape to a variable named **`result`** (a Part, Solid, Compound, or a BuildPart builder):
 
@@ -88,16 +88,16 @@ Response:
 
 **Mass requires an explicit `density_kg_m3`** (2700 for aluminium 6061, 7850 for steel…). Without it, `mass_kg` is absent — it is never guessed from a material name.
 
-### `cad_export`
+### `build123d_export`
 
-Same execution, plus files. `formats`: `step` (exact BREP), `stl` (mesh), `gltf` (binary `.glb`). Files land under `CAD_EXPORT_DIR` (default `./cad-exports`); the response returns paths and sizes, along with the same metrics.
+Same execution, plus files. `formats`: `step` (exact BREP), `stl` (mesh), `gltf` (binary `.glb`). Files land under `BUILD123D_EXPORT_DIR` (default `./cad-exports`); the response returns paths and sizes, along with the same metrics.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CAD_PYTHON_BIN` | `python3` | Python interpreter that has build123d |
-| `CAD_EXPORT_DIR` | `./cad-exports` | Where `cad_export` writes files |
+| `BUILD123D_PYTHON_BIN` | `python3` | Python interpreter that has build123d |
+| `BUILD123D_EXPORT_DIR` | `./cad-exports` | Where `build123d_export` writes files |
 
 ## Architecture
 
@@ -109,7 +109,7 @@ src/
     harness.py          # Python side: exec script, compute metrics, export
     python-bridge.ts    # Deno side: subprocess, JSON over stdin/stdout
   tools/
-    execute.ts          # cad_execute, cad_export
+    execute.ts          # build123d_execute, build123d_export
   client.ts             # CadToolsClient
 tests/                  # 9 tests against real build123d
 ```
@@ -118,7 +118,7 @@ The bridge is a subprocess speaking JSON — the same architectural choice as `@
 
 ## Composing the chain
 
-`cad_execute`'s mass feeds `@casys/constraint-solver` (via `@casys/mcp-syson`'s `syson_constraint_evaluate`) to check a computed mass against a SysML mass budget — with units. `cad_export`'s STEP file is the entry point for FEA meshing. Each link is a separate MCP server; the agent composes them.
+`build123d_execute`'s mass feeds `@casys/constraint-solver` (via `@casys/mcp-syson`'s `syson_constraint_evaluate`) to check a computed mass against a SysML mass budget — with units. `build123d_export`'s STEP file is the entry point for FEA meshing. Each link is a separate MCP server; the agent composes them.
 
 ## Development
 

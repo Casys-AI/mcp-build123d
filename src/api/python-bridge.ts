@@ -15,7 +15,7 @@ export class PythonNotFoundError extends Error {
     super(
       `Python interpreter '${interpreter}' was not found on PATH. ` +
         `Install Python 3.10+ and build123d (pip install build123d), ` +
-        `or point CAD_PYTHON_BIN at the right interpreter.`,
+        `or point BUILD123D_PYTHON_BIN at the right interpreter.`,
     );
     this.name = "PythonNotFoundError";
   }
@@ -67,9 +67,9 @@ interface HarnessResponse {
 
 const HARNESS_PATH = new URL("./harness.py", import.meta.url).pathname;
 
-/** Python interpreter — override with CAD_PYTHON_BIN. */
+/** Python interpreter — override with BUILD123D_PYTHON_BIN. */
 function pythonBin(): string {
-  return Deno.env.get("CAD_PYTHON_BIN") ?? "python3";
+  return Deno.env.get("BUILD123D_PYTHON_BIN") ?? "python3";
 }
 
 /**
