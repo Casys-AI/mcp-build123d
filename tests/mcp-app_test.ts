@@ -52,7 +52,17 @@ Deno.test("build123d MCP App tools publish the shared viewer and explicit output
   ]);
   for (const tool of tools) {
     assertEquals(tool._meta?.ui?.resourceUri, RESULTS_VIEWER_URI);
-    assertEquals(tool.outputSchema.oneOf instanceof Array, true);
+    assertEquals(
+      (tool.outputSchema.properties as { kind: { const: string } }).kind.const,
+      tool.name === "build123d_execute" ? "execution" : "export",
+    );
+    assertEquals(
+      (tool.outputSchema.properties as {
+        metrics: { properties: Record<string, { minimum: number }> };
+      })
+        .metrics.properties.volume_mm3.minimum,
+      0,
+    );
   }
 });
 
@@ -70,7 +80,6 @@ Deno.test("build123d tools/list uses the stateless 2026 wire contract", async ()
         "Content-Type": "application/json",
         "MCP-Protocol-Version": PROTOCOL_VERSION,
         "Mcp-Method": "tools/list",
-        "Mcp-Name": "build123d-contract-test",
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
@@ -95,12 +104,44 @@ Deno.test("build123d tools/list uses the stateless 2026 wire contract", async ()
         RESULTS_VIEWER_URI,
       );
       assertEquals(
-        (tool.outputSchema as { oneOf: unknown[] }).oneOf.length,
-        2,
+        (tool.outputSchema as { properties: { kind: { const: string } } })
+          .properties.kind.const,
+        tool.name === "build123d_execute" ? "execution" : "export",
       );
     }
   } finally {
     await http.shutdown();
+  }
+});
+
+Deno.test("build123d result viewer reads the exact published remote bundle path", async () => {
+  const seen: string[] = [];
+  const remote = Deno.serve(
+    { hostname: "127.0.0.1", port: 0, onListen: () => {} },
+    (request) => {
+      seen.push(new URL(request.url).pathname);
+      return new Response("<!doctype html><title>published CAD result</title>");
+    },
+  );
+  const port = (remote.addr as Deno.NetAddr).port;
+  try {
+    const assembly = createCadMcpApp({
+      viewerModuleUrl:
+        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.1.2/server.ts`,
+    });
+    assertEquals(assembly.viewers, {
+      registered: ["results-viewer"],
+      skipped: [],
+    });
+    assertStringIncludes(
+      (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))?.text ?? "",
+      "published CAD result",
+    );
+    assertEquals(seen, [
+      "/@casys/mcp-build123d/0.1.2/src/ui/dist/results-viewer/index.html",
+    ]);
+  } finally {
+    await remote.shutdown();
   }
 });
 

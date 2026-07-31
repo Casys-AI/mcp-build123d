@@ -68,8 +68,8 @@ const METRICS_SCHEMA = {
     "edges",
   ],
   properties: {
-    volume_mm3: { type: "number" },
-    area_mm2: { type: "number" },
+    volume_mm3: { type: "number", minimum: 0 },
+    area_mm2: { type: "number", minimum: 0 },
     center_of_mass_mm: {
       type: "array",
       items: { type: "number" },
@@ -120,31 +120,28 @@ const FILE_SCHEMA = {
   },
 } as const;
 
-const RESULT_OUTPUT_SCHEMA = {
-  oneOf: [
-    {
-      type: "object",
-      additionalProperties: false,
-      required: ["schemaVersion", "kind", "metrics", "files"],
-      properties: {
-        schemaVersion: { const: "1.0" },
-        kind: { const: "execution" },
-        metrics: METRICS_SCHEMA,
-        files: { type: "array", maxItems: 0, items: FILE_SCHEMA },
-      },
-    },
-    {
-      type: "object",
-      additionalProperties: false,
-      required: ["schemaVersion", "kind", "metrics", "files"],
-      properties: {
-        schemaVersion: { const: "1.0" },
-        kind: { const: "export" },
-        metrics: METRICS_SCHEMA,
-        files: { type: "array", items: FILE_SCHEMA },
-      },
-    },
-  ],
+const EXECUTION_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["schemaVersion", "kind", "metrics", "files"],
+  properties: {
+    schemaVersion: { const: "1.0" },
+    kind: { const: "execution" },
+    metrics: METRICS_SCHEMA,
+    files: { type: "array", maxItems: 0, items: FILE_SCHEMA },
+  },
+} as const;
+
+const EXPORT_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["schemaVersion", "kind", "metrics", "files"],
+  properties: {
+    schemaVersion: { const: "1.0" },
+    kind: { const: "export" },
+    metrics: METRICS_SCHEMA,
+    files: { type: "array", minItems: 1, items: FILE_SCHEMA },
+  },
 } as const;
 
 export interface GeometryStructuredContent {
@@ -209,7 +206,7 @@ export const executeTools: CadTool[] = [
       },
       required: ["script"],
     },
-    outputSchema: RESULT_OUTPUT_SCHEMA,
+    outputSchema: EXECUTION_OUTPUT_SCHEMA,
     handler: async (args) => {
       const { metrics } = await runCadScript(args.script as string, {
         densityKgM3: args.density_kg_m3 as number | undefined,
@@ -258,7 +255,7 @@ export const executeTools: CadTool[] = [
       },
       required: ["script", "formats", "name"],
     },
-    outputSchema: RESULT_OUTPUT_SCHEMA,
+    outputSchema: EXPORT_OUTPUT_SCHEMA,
     handler: async (args) => {
       const formats = args.formats as ExportSpec["format"][];
       const basename = sanitizeBasename(args.name as string);
