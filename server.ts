@@ -1,18 +1,8 @@
 /**
  * MCP Server Bootstrap for CAD Tools
  *
- * Usage in an MCP config (stdio mode):
- * {
- *   "mcpServers": {
- *     "cad": {
- *       "command": "deno",
- *       "args": ["run", "--allow-all", "jsr:@casys/mcp-build123d/server"]
- *     }
- *   }
- * }
- *
- * HTTP mode (default port: 3014):
- *   deno run --allow-all server.ts --http --port=3014
+ * Stateless HTTP server (default port: 3014):
+ *   deno run --allow-all server.ts --port=3014
  *
  * Environment:
  *   BUILD123D_PYTHON_BIN   Python interpreter with build123d (default: python3)
@@ -21,8 +11,7 @@
  * @module lib/cad/server
  */
 
-import { ConcurrentMCPServer } from "@casys/mcp-server";
-import { CadToolsClient } from "./src/client.ts";
+import { createCadMcpApp } from "./src/server-app.ts";
 
 const DEFAULT_HTTP_PORT = 3014;
 
@@ -30,41 +19,32 @@ async function main() {
   const args = Deno.args;
 
   const categoriesArg = args.find((arg) => arg.startsWith("--categories="));
-  const categories = categoriesArg ? categoriesArg.split("=")[1].split(",") : undefined;
+  const categories = categoriesArg
+    ? categoriesArg.split("=")[1].split(",")
+    : undefined;
 
-  const httpFlag = args.includes("--http");
   const portArg = args.find((arg) => arg.startsWith("--port="));
-  const httpPort = portArg ? parseInt(portArg.split("=")[1], 10) : DEFAULT_HTTP_PORT;
+  const httpPort = portArg
+    ? parseInt(portArg.split("=")[1], 10)
+    : DEFAULT_HTTP_PORT;
   const hostnameArg = args.find((arg) => arg.startsWith("--hostname="));
   const hostname = hostnameArg ? hostnameArg.split("=")[1] : "127.0.0.1"; // loopback by default — these tools execute code; exposing them is an explicit choice
 
-  const toolsClient = new CadToolsClient(categories ? { categories } : undefined);
+  const { app: server, toolsClient } = createCadMcpApp({ categories });
 
-  const server = new ConcurrentMCPServer({
-    name: "mcp-build123d",
-    version: "0.1.2",
-    maxConcurrent: 4,
-    backpressureStrategy: "queue",
-    validateSchema: true,
-    logger: (msg) => console.error(`[mcp-build123d] ${msg}`),
+  await server.startHttp({
+    port: httpPort,
+    hostname,
+    cors: true,
+    onListen: (info) => {
+      console.error(
+        `[mcp-build123d] HTTP server listening on http://${info.hostname}:${info.port}`,
+      );
+    },
   });
-
-  server.registerTools(toolsClient.toMCPFormat(), toolsClient.buildHandlersMap());
-
-  if (httpFlag) {
-    await server.startHttp({
-      port: httpPort,
-      hostname,
-      cors: true,
-      onListen: (info) => {
-        console.error(`[mcp-build123d] HTTP server listening on http://${info.hostname}:${info.port}`);
-      },
-    });
-    console.error(`[mcp-build123d] Server ready (${toolsClient.count} tools) - HTTP mode`);
-  } else {
-    await server.start();
-    console.error(`[mcp-build123d] Server ready (${toolsClient.count} tools) - stdio mode`);
-  }
+  console.error(
+    `[mcp-build123d] Server ready (${toolsClient.count} tools) - stateless HTTP`,
+  );
 
   Deno.addSignalListener("SIGINT", () => {
     console.error("[mcp-build123d] Shutting down...");

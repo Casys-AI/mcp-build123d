@@ -36,6 +36,13 @@ export interface ExportSpec {
   path: string;
 }
 
+/** A file written by the harness as part of an export request. */
+export interface CadExportFile {
+  format: ExportSpec["format"];
+  path: string;
+  bytes: number;
+}
+
 export interface CadMetrics {
   volume_mm3: number;
   area_mm2: number;
@@ -56,13 +63,13 @@ export interface CadMetrics {
 
 export interface HarnessResult {
   metrics: CadMetrics;
-  exports: Array<{ format: string; path: string; bytes: number }>;
+  exports: CadExportFile[];
 }
 
 interface HarnessResponse {
   ok: boolean;
   metrics?: CadMetrics;
-  exports?: Array<{ format: string; path: string; bytes: number }>;
+  exports?: CadExportFile[];
   error?: string;
   traceback?: string | null;
 }

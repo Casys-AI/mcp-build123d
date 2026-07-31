@@ -1,5 +1,4 @@
 node_modules/
-deno.lock
 
 # Credentials — never commit credentials
 .env

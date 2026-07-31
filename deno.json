@@ -1,11 +1,11 @@
 {
   "name": "@casys/mcp-build123d",
-  "version": "0.1.2",
-  "minimumDependencyAge": "0",
+  "version": "0.2.0",
   "tasks": {
-    "serve": "deno run --allow-all server.ts --http --port=3014",
+    "serve": "deno run --allow-all server.ts --port=3014",
     "compile": "deno compile -A --output mcp-build123d server.ts",
     "test": "deno test --allow-all tests/",
+    "build:ui": "deno run --allow-env --allow-net --allow-read --allow-run --allow-write scripts/build-results-viewer.ts",
     "generate:harness-source": "deno run --allow-read --allow-write scripts/generate-harness-source.ts && deno fmt src/api/harness-source.ts"
   },
   "exports": {
@@ -17,6 +17,7 @@
       "mod.ts",
       "server.ts",
       "src/**/*.ts",
+      "src/ui/dist/**/*.html",
       "src/api/harness.py",
       "README.md",
       "LICENSE"
@@ -28,12 +29,13 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.22.0",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.24.0",
     "ajv": "npm:ajv@^8.17.1",
     "hono": "npm:hono@^4",
     "hono/cors": "npm:hono@^4/cors",
     "jose": "npm:jose@^6.0.0",
     "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
+    "@std/path": "jsr:@std/path@^1.0.0",
     "@std/yaml": "jsr:@std/yaml@^1",
     "@std/assert": "jsr:@std/assert@^1"
   }

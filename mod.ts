@@ -24,11 +24,18 @@ export type {
   MCPToolWireFormat,
 } from "./src/client.ts";
 
-export { executeTools } from "./src/tools/mod.ts";
+export { executeTools, geometryToolResult } from "./src/tools/execute.ts";
+export type { GeometryStructuredContent } from "./src/tools/execute.ts";
+export { RESULTS_VIEWER_URI } from "./src/ui/constants.ts";
 
 export {
   CadExecutionError,
   PythonNotFoundError,
   runCadScript,
 } from "./src/api/python-bridge.ts";
-export type { CadMetrics, ExportSpec, HarnessResult } from "./src/api/python-bridge.ts";
+export type {
+  CadExportFile,
+  CadMetrics,
+  ExportSpec,
+  HarnessResult,
+} from "./src/api/python-bridge.ts";
