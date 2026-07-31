@@ -13,6 +13,11 @@ function getHandler(name: string) {
   return tool.handler;
 }
 
+function structuredContent(result: unknown): Record<string, unknown> {
+  return (result as { structuredContent: Record<string, unknown> })
+    .structuredContent;
+}
+
 /** A 10×20×5 mm box: volume 1000 mm³, trivially verifiable by hand. */
 const BOX_SCRIPT = `
 from build123d import *
@@ -24,10 +29,15 @@ result = p
 // ── build123d_execute ─────────────────────────────────────────────────────────────
 
 Deno.test("build123d_execute - exact analytical metrics for a known box", async () => {
-  const metrics = await getHandler("build123d_execute")({
+  const result = await getHandler("build123d_execute")({
     script: BOX_SCRIPT,
-  }) as Record<string, unknown>;
+  });
+  const payload = structuredContent(result);
+  const metrics = payload.metrics as Record<string, unknown>;
 
+  assertEquals(payload.schemaVersion, "1.0");
+  assertEquals(payload.kind, "execution");
+  assertEquals(payload.files, []);
   assertAlmostEquals(metrics.volume_mm3 as number, 1000, 1e-6);
   assertAlmostEquals(metrics.area_mm2 as number, 700, 1e-6);
   assertEquals(metrics.solids, 1);
@@ -39,16 +49,20 @@ Deno.test("build123d_execute - exact analytical metrics for a known box", async 
 });
 
 Deno.test("build123d_execute - mass appears only with an explicit density", async () => {
-  const without = await getHandler("build123d_execute")({
-    script: BOX_SCRIPT,
-  }) as Record<string, unknown>;
+  const without = structuredContent(
+    await getHandler("build123d_execute")({
+      script: BOX_SCRIPT,
+    }),
+  ).metrics as Record<string, unknown>;
   // No density → no mass at all. Never guessed from anything.
   assertEquals("mass_kg" in without, false);
 
-  const withDensity = await getHandler("build123d_execute")({
-    script: BOX_SCRIPT,
-    density_kg_m3: 2700,
-  }) as Record<string, unknown>;
+  const withDensity = structuredContent(
+    await getHandler("build123d_execute")({
+      script: BOX_SCRIPT,
+      density_kg_m3: 2700,
+    }),
+  ).metrics as Record<string, unknown>;
   // 1000 mm³ × 2700 kg/m³ = 2.7 g
   assertAlmostEquals(withDensity.mass_kg as number, 0.0027, 1e-9);
 });
@@ -90,12 +104,20 @@ Deno.test("build123d_export - writes the requested formats and returns metrics",
   const dir = await Deno.makeTempDir({ prefix: "cad-test-" });
   Deno.env.set("BUILD123D_EXPORT_DIR", dir);
   try {
-    const result = await getHandler("build123d_export")({
-      script: BOX_SCRIPT,
-      formats: ["step", "gltf"],
-      name: "box",
-    }) as { metrics: Record<string, unknown>; files: Array<{ path: string; bytes: number }> };
+    const payload = structuredContent(
+      await getHandler("build123d_export")({
+        script: BOX_SCRIPT,
+        formats: ["step", "gltf"],
+        name: "box",
+      }),
+    );
+    const result = {
+      metrics: payload.metrics as Record<string, unknown>,
+      files: payload.files as Array<{ path: string; bytes: number }>,
+    };
 
+    assertEquals(payload.schemaVersion, "1.0");
+    assertEquals(payload.kind, "export");
     assertEquals(result.files.length, 2);
     assertEquals(result.files[0].path, `${dir}/box.step`);
     assertEquals(result.files[1].path, `${dir}/box.glb`);
@@ -115,11 +137,14 @@ Deno.test("build123d_export - path traversal in the name is neutralised", async 
   const dir = await Deno.makeTempDir({ prefix: "cad-test-" });
   Deno.env.set("BUILD123D_EXPORT_DIR", dir);
   try {
-    const result = await getHandler("build123d_export")({
-      script: BOX_SCRIPT,
-      formats: ["stl"],
-      name: "../../etc/passwd",
-    }) as { files: Array<{ path: string }> };
+    const payload = structuredContent(
+      await getHandler("build123d_export")({
+        script: BOX_SCRIPT,
+        formats: ["stl"],
+        name: "../../etc/passwd",
+      }),
+    );
+    const result = { files: payload.files as Array<{ path: string }> };
 
     // Directory components are stripped; the file lands inside the export dir.
     assertEquals(result.files[0].path, `${dir}/passwd.stl`);
@@ -159,5 +184,10 @@ Deno.test("executeTools - tool count, category, schema coherence", () => {
         `${tool.name}: required field "${field}" missing from properties`,
       );
     }
+    assertEquals(
+      tool._meta?.ui?.resourceUri,
+      "ui://mcp-build123d/results-viewer",
+    );
+    assertEquals(tool.outputSchema.oneOf instanceof Array, true);
   }
 });
