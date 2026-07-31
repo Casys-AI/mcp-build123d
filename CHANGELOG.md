@@ -2,6 +2,14 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [0.3.1] - 2026-07-31
+
+### Fixed
+
+- **Published server metadata now matches the package release.**
+  `server/discover`, `/health`, and the published viewer bundle path report
+  `0.3.1` rather than the stale `0.2.0` value.
+
 ## [0.3.0] - 2026-07-31
 
 ### Added

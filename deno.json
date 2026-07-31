@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-build123d",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "tasks": {
     "serve": "deno run --allow-all server.ts --port=3014",
     "compile": "deno compile -A --output mcp-build123d server.ts",
