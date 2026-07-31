@@ -88,6 +88,173 @@ h2 {
   padding: 16px;
   box-shadow: 5px 5px 0 color-mix(in srgb, var(--cad-bg) 70%, #000);
 }
+
+.model-panel {
+  margin-top: 16px;
+  padding: 0;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--cad-accent) 42%, var(--cad-line));
+}
+
+.model-head,
+.model-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.model-head {
+  min-height: 64px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--cad-line);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cad-panel) 94%,
+    #000), var(--cad-panel));
+}
+
+.model-head .section-heading {
+  margin: 0;
+}
+
+.cad-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cad-controls button {
+  appearance: none;
+  min-height: 30px;
+  border: 1px solid var(--cad-line);
+  border-radius: 0;
+  padding: 0 10px;
+  background: var(--cad-bg);
+  color: var(--cad-text);
+  cursor: pointer;
+  font: 700 10px/1 var(--cad-mono);
+  letter-spacing: .07em;
+}
+
+.cad-controls button:hover,
+.cad-controls button:focus-visible {
+  outline: none;
+  border-color: var(--cad-accent);
+  color: var(--cad-accent);
+}
+
+.cad-controls button[aria-pressed="true"] {
+  border-color: var(--cad-accent);
+  background: var(--cad-accent);
+  color: var(--cad-accent-ink);
+}
+
+.cad-stage {
+  position: relative;
+  min-height: 440px;
+  isolation: isolate;
+  overflow: hidden;
+  background: #07100f;
+}
+
+#cad-viewport {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+#cad-viewport canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cad-reticle {
+  position: absolute;
+  z-index: 2;
+  inset: 50% auto auto 50%;
+  width: 26px;
+  height: 26px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: .3;
+  background: linear-gradient(var(--cad-accent), var(--cad-accent)) center / 1px
+    100% no-repeat, linear-gradient(90deg, var(--cad-accent),
+    var(--cad-accent)) center / 100% 1px no-repeat;
+}
+
+.cad-hud {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  pointer-events: none;
+  color: #a8bbb2;
+  font: 700 10px/1.25 var(--cad-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px #000;
+}
+
+.cad-hud i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--cad-accent);
+  box-shadow: 0 0 8px var(--cad-accent);
+}
+
+.cad-stage-state {
+  display: grid;
+  min-height: 280px;
+  place-content: center;
+  justify-items: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.cad-stage-state .cad-state-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 14px;
+  place-items: center;
+  border: 1px solid var(--cad-accent);
+  color: var(--cad-accent);
+  font: 26px/1 var(--cad-mono);
+}
+
+.cad-stage-state p {
+  max-width: 52ch;
+  margin: 7px 0 0;
+  color: var(--cad-muted);
+}
+
+.cad-stage-state strong {
+  font-size: 18px;
+}
+
+.model-foot {
+  min-height: 38px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--cad-line);
+  color: var(--cad-muted);
+  font: 10px/1.25 var(--cad-mono);
+  text-transform: uppercase;
+}
+
+.model-foot code {
+  flex: 1;
+  overflow: hidden;
+  color: var(--cad-muted);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .primary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -207,6 +374,18 @@ code {
   }
   .split {
     grid-template-columns: 1fr;
+  }
+  .model-head,
+  .model-foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .cad-stage {
+    min-height: 340px;
+  }
+  .model-foot code {
+    max-width: 100%;
+    text-align: left;
   }
   .exports li {
     align-items: flex-start;

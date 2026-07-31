@@ -3,7 +3,12 @@
  * server itself; CI installs it). Scripts are kept minimal so OCCT runs fast.
  */
 
-import { assertAlmostEquals, assertEquals, assertRejects } from "@std/assert";
+import {
+  assertAlmostEquals,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from "@std/assert";
 import { executeTools } from "../src/tools/execute.ts";
 import { CadExecutionError } from "../src/api/python-bridge.ts";
 
@@ -113,7 +118,11 @@ Deno.test("build123d_export - writes the requested formats and returns metrics",
     );
     const result = {
       metrics: payload.metrics as Record<string, unknown>,
-      files: payload.files as Array<{ path: string; bytes: number }>,
+      files: payload.files as Array<{
+        path: string;
+        bytes: number;
+        viewer?: { toolName: string; name: string };
+      }>,
     };
 
     assertEquals(payload.schemaVersion, "1.0");
@@ -121,12 +130,166 @@ Deno.test("build123d_export - writes the requested formats and returns metrics",
     assertEquals(result.files.length, 2);
     assertEquals(result.files[0].path, `${dir}/box.step`);
     assertEquals(result.files[1].path, `${dir}/box.glb`);
+    assertEquals(result.files[0].viewer, undefined);
+    assertEquals(result.files[1].viewer, {
+      toolName: "build123d_export_read",
+      name: "box.glb",
+    });
     for (const file of result.files) {
       const stat = await Deno.stat(file.path);
       assertEquals(stat.size > 0, true);
       assertEquals(stat.size, file.bytes);
     }
     assertAlmostEquals(result.metrics.volume_mm3 as number, 1000, 1e-6);
+  } finally {
+    Deno.env.delete("BUILD123D_EXPORT_DIR");
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("build123d_export_read - returns a bounded GLB without exposing another path", async () => {
+  const dir = await Deno.makeTempDir({ prefix: "cad-artifact-test-" });
+  Deno.env.set("BUILD123D_EXPORT_DIR", dir);
+  try {
+    const bytes = new Uint8Array([
+      0x67,
+      0x6c,
+      0x54,
+      0x46,
+      2,
+      0,
+      0,
+      0,
+      12,
+      0,
+      0,
+      0,
+    ]);
+    await Deno.writeFile(`${dir}/assembly.glb`, bytes);
+
+    const payload = structuredContent(
+      await getHandler("build123d_export_read")({ name: "assembly.glb" }),
+    );
+    assertEquals(payload, {
+      schemaVersion: "1.0",
+      kind: "gltf-binary",
+      name: "assembly.glb",
+      mimeType: "model/gltf-binary",
+      bytes: bytes.length,
+      base64: bytes.toBase64(),
+    });
+
+    const fallback = await getHandler("build123d_export_read")({
+      name: "assembly.glb",
+    });
+    assertStringIncludes(fallback.content, "assembly.glb");
+    assertEquals(fallback.content.includes(bytes.toBase64()), false);
+  } finally {
+    Deno.env.delete("BUILD123D_EXPORT_DIR");
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("build123d_export_read - rejects traversal, other formats and oversized GLB", async () => {
+  const dir = await Deno.makeTempDir({ prefix: "cad-artifact-test-" });
+  Deno.env.set("BUILD123D_EXPORT_DIR", dir);
+  Deno.env.set("BUILD123D_GLTF_MAX_BYTES", "12");
+  try {
+    await Deno.writeFile(`${dir}/too-large.glb`, new Uint8Array(13));
+    await assertRejects(
+      async () =>
+        await getHandler("build123d_export_read")({ name: "../secret.glb" }),
+      Error,
+      "safe .glb basename",
+    );
+    await assertRejects(
+      async () =>
+        await getHandler("build123d_export_read")({ name: "part.step" }),
+      Error,
+      "safe .glb basename",
+    );
+    await assertRejects(
+      async () =>
+        await getHandler("build123d_export_read")({ name: "too-large.glb" }),
+      Error,
+      "exceeds",
+    );
+  } finally {
+    Deno.env.delete("BUILD123D_GLTF_MAX_BYTES");
+    Deno.env.delete("BUILD123D_EXPORT_DIR");
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("build123d_export_read - rejects a symlink escaping the export directory", async () => {
+  const dir = await Deno.makeTempDir({ prefix: "cad-artifact-root-" });
+  const outside = await Deno.makeTempDir({ prefix: "cad-artifact-outside-" });
+  Deno.env.set("BUILD123D_EXPORT_DIR", dir);
+  try {
+    const bytes = new Uint8Array([
+      0x67,
+      0x6c,
+      0x54,
+      0x46,
+      2,
+      0,
+      0,
+      0,
+      12,
+      0,
+      0,
+      0,
+    ]);
+    await Deno.writeFile(`${outside}/private.glb`, bytes);
+    await Deno.symlink(`${outside}/private.glb`, `${dir}/linked.glb`);
+    await assertRejects(
+      async () =>
+        await getHandler("build123d_export_read")({ name: "linked.glb" }),
+      Error,
+      "escapes BUILD123D_EXPORT_DIR",
+    );
+  } finally {
+    Deno.env.delete("BUILD123D_EXPORT_DIR");
+    await Deno.remove(dir, { recursive: true });
+    await Deno.remove(outside, { recursive: true });
+  }
+});
+
+Deno.test("build123d_export_read - rejects wrong GLB version and declared length", async () => {
+  const dir = await Deno.makeTempDir({ prefix: "cad-artifact-header-" });
+  Deno.env.set("BUILD123D_EXPORT_DIR", dir);
+  try {
+    const wrongVersion = new Uint8Array([
+      0x67,
+      0x6c,
+      0x54,
+      0x46,
+      1,
+      0,
+      0,
+      0,
+      12,
+      0,
+      0,
+      0,
+    ]);
+    await Deno.writeFile(`${dir}/v1.glb`, wrongVersion);
+    await assertRejects(
+      async () => await getHandler("build123d_export_read")({ name: "v1.glb" }),
+      Error,
+      "version 2",
+    );
+
+    const wrongLength = wrongVersion.slice();
+    wrongLength[4] = 2;
+    wrongLength[8] = 13;
+    await Deno.writeFile(`${dir}/length.glb`, wrongLength);
+    await assertRejects(
+      async () =>
+        await getHandler("build123d_export_read")({ name: "length.glb" }),
+      Error,
+      "declared GLB length",
+    );
   } finally {
     Deno.env.delete("BUILD123D_EXPORT_DIR");
     await Deno.remove(dir, { recursive: true });
@@ -170,7 +333,7 @@ Deno.test("build123d_export - a name that reduces to nothing is rejected", async
 // ── Invariants ──────────────────────────────────────────────────────────────
 
 Deno.test("executeTools - tool count, category, schema coherence", () => {
-  assertEquals(executeTools.length, 2);
+  assertEquals(executeTools.length, 3);
   for (const tool of executeTools) {
     assertEquals(tool.category, "execute");
     const schema = tool.inputSchema as {
@@ -183,6 +346,23 @@ Deno.test("executeTools - tool count, category, schema coherence", () => {
         true,
         `${tool.name}: required field "${field}" missing from properties`,
       );
+    }
+    if (tool.name === "build123d_export_read") {
+      assertEquals(tool._meta?.ui, {
+        resourceUri: "ui://mcp-build123d/results-viewer",
+        visibility: ["app"],
+      });
+      assertEquals(
+        (tool.outputSchema.properties as { kind: { const: string } }).kind
+          .const,
+        "gltf-binary",
+      );
+      assertEquals(
+        (tool.inputSchema as { additionalProperties: boolean })
+          .additionalProperties,
+        false,
+      );
+      continue;
     }
     assertEquals(
       tool._meta?.ui?.resourceUri,

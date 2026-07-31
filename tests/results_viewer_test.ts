@@ -1,5 +1,8 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { parseGeometryResult } from "../src/ui/results-viewer/src/contract.ts";
+import {
+  decodeGltfArtifact,
+  parseGeometryResult,
+} from "../src/ui/results-viewer/src/contract.ts";
 import { renderViewer } from "../src/ui/results-viewer/src/render.ts";
 
 const METRICS = {
@@ -35,6 +38,89 @@ Deno.test("results viewer parses exactly the v1 execution and export envelopes",
   assertEquals(exported.ok, true);
   if (!exported.ok) return;
   assertEquals(exported.value.files[0].format, "step");
+
+  const gltf = parseGeometryResult({
+    schemaVersion: "1.0",
+    kind: "export",
+    metrics: METRICS,
+    files: [{
+      format: "gltf",
+      path: "/exports/assembly.glb",
+      bytes: 12,
+      viewer: { toolName: "build123d_export_read", name: "assembly.glb" },
+    }],
+  });
+  assertEquals(gltf.ok, true);
+  if (!gltf.ok) return;
+  assertEquals(gltf.value.files[0].viewer, {
+    toolName: "build123d_export_read",
+    name: "assembly.glb",
+  });
+});
+
+Deno.test("results viewer validates and decodes only the GLB helper envelope", () => {
+  const binary = new Uint8Array([
+    0x67,
+    0x6c,
+    0x54,
+    0x46,
+    2,
+    0,
+    0,
+    0,
+    12,
+    0,
+    0,
+    0,
+  ]);
+  const decoded = decodeGltfArtifact({
+    schemaVersion: "1.0",
+    kind: "gltf-binary",
+    name: "assembly.glb",
+    mimeType: "model/gltf-binary",
+    bytes: binary.length,
+    base64: binary.toBase64(),
+  });
+  assertEquals(decoded.ok, true);
+  if (decoded.ok) assertEquals(decoded.value, binary);
+
+  const wrongLength = decodeGltfArtifact({
+    schemaVersion: "1.0",
+    kind: "gltf-binary",
+    name: "assembly.glb",
+    mimeType: "model/gltf-binary",
+    bytes: binary.length + 1,
+    base64: binary.toBase64(),
+  });
+  assertEquals(wrongLength.ok, false);
+
+  const wrongVersion = binary.slice();
+  wrongVersion[4] = 1;
+  const versionResult = decodeGltfArtifact({
+    schemaVersion: "1.0",
+    kind: "gltf-binary",
+    name: "assembly.glb",
+    mimeType: "model/gltf-binary",
+    bytes: wrongVersion.length,
+    base64: wrongVersion.toBase64(),
+  });
+  assertEquals(versionResult.ok, false);
+  if (!versionResult.ok) assertStringIncludes(versionResult.error, "version 2");
+
+  const badDeclaredLength = binary.slice();
+  badDeclaredLength[8] = 13;
+  const lengthResult = decodeGltfArtifact({
+    schemaVersion: "1.0",
+    kind: "gltf-binary",
+    name: "assembly.glb",
+    mimeType: "model/gltf-binary",
+    bytes: badDeclaredLength.length,
+    base64: badDeclaredLength.toBase64(),
+  });
+  assertEquals(lengthResult.ok, false);
+  if (!lengthResult.ok) {
+    assertStringIncludes(lengthResult.error, "declared length");
+  }
 });
 
 Deno.test("results viewer rejects invalid v1 envelopes before rendering", () => {
@@ -115,4 +201,29 @@ Deno.test("results viewer exposes loading state without leaving the host busy", 
     renderViewer({ phase: "error", message: "Nope" }),
     'aria-busy="false"',
   );
+});
+
+Deno.test("results viewer renders the interactive CAD viewport controls", () => {
+  const parsed = parseGeometryResult({
+    schemaVersion: "1.0",
+    kind: "export",
+    metrics: METRICS,
+    files: [{
+      format: "gltf",
+      path: "/exports/assembly.glb",
+      bytes: 4096,
+      viewer: { toolName: "build123d_export_read", name: "assembly.glb" },
+    }],
+  });
+  if (!parsed.ok) throw new Error(parsed.error);
+  const html = renderViewer({
+    phase: "ready",
+    result: parsed.value,
+    model: { phase: "ready" },
+  });
+  assertStringIncludes(html, 'id="cad-viewport"');
+  assertStringIncludes(html, 'data-cad-action="fit"');
+  assertStringIncludes(html, 'data-cad-action="reset"');
+  assertStringIncludes(html, 'data-cad-action="wireframe"');
+  assertStringIncludes(html, "Orbit · Pan · Zoom");
 });

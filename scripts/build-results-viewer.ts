@@ -6,7 +6,7 @@ import { dirname, fromFileUrl, join } from "@std/path";
 const here = dirname(fromFileUrl(import.meta.url));
 const viewer = join(here, "..", "src", "ui", "results-viewer");
 const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ??
-  "jsr:@casys/mcp-view@0.4.0";
+  "jsr:@casys/mcp-view@0.4.1";
 const temporaryConfigDir = await Deno.makeTempDir({
   prefix: "mcp-build123d-view-",
 });
@@ -30,6 +30,8 @@ try {
         "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
         "@modelcontextprotocol/sdk/types.js":
           "npm:@modelcontextprotocol/sdk@^1.29.0/types.js",
+        "three": "npm:three@0.172.0",
+        "three/": "npm:/three@0.172.0/",
       },
     }),
   );

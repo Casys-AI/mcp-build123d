@@ -42,6 +42,22 @@ Deno.test("geometry result keeps a concise fallback and no source or file conten
     files: [],
   });
   assertEquals("script" in result.structuredContent, false);
+
+  const exported = geometryToolResult("export", METRICS, [{
+    format: "gltf",
+    path: "/exports/assembly.glb",
+    bytes: 2048,
+  }]);
+  assertEquals(exported.structuredContent.files, [{
+    format: "gltf",
+    path: "/exports/assembly.glb",
+    bytes: 2048,
+    viewer: {
+      toolName: "build123d_export_read",
+      name: "assembly.glb",
+    },
+  }]);
+  assertEquals("base64" in exported.structuredContent, false);
 });
 
 Deno.test("build123d MCP App tools publish the shared viewer and explicit output schema", () => {
@@ -49,8 +65,21 @@ Deno.test("build123d MCP App tools publish the shared viewer and explicit output
   assertEquals(tools.map((tool) => tool.name), [
     "build123d_execute",
     "build123d_export",
+    "build123d_export_read",
   ]);
   for (const tool of tools) {
+    if (tool.name === "build123d_export_read") {
+      assertEquals(tool._meta?.ui, {
+        resourceUri: RESULTS_VIEWER_URI,
+        visibility: ["app"],
+      });
+      assertEquals(
+        (tool.outputSchema.properties as { kind: { const: string } }).kind
+          .const,
+        "gltf-binary",
+      );
+      continue;
+    }
     assertEquals(tool._meta?.ui?.resourceUri, RESULTS_VIEWER_URI);
     assertEquals(
       (tool.outputSchema.properties as { kind: { const: string } }).kind.const,
@@ -97,8 +126,19 @@ Deno.test("build123d tools/list uses the stateless 2026 wire contract", async ()
     const body = await response.json() as {
       result: { tools: Array<Record<string, unknown>> };
     };
-    assertEquals(body.result.tools.length, 2);
+    // A model-only tools/list does not advertise the app-only GLB reader.
+    assertEquals(
+      body.result.tools.map((tool) => tool.name),
+      ["build123d_execute", "build123d_export"],
+    );
     for (const tool of body.result.tools) {
+      if (tool.name === "build123d_export_read") {
+        assertEquals((tool._meta as { ui: unknown }).ui, {
+          resourceUri: RESULTS_VIEWER_URI,
+          visibility: ["app"],
+        });
+        continue;
+      }
       assertEquals(
         (tool._meta as { ui: { resourceUri: string } }).ui.resourceUri,
         RESULTS_VIEWER_URI,
@@ -215,7 +255,7 @@ Deno.test("build123d result viewer is registered when its HTML bundle exists", a
     registered: ["results-viewer"],
     skipped: [],
   });
-  assertEquals(assembly.app.getToolCount(), 2);
+  assertEquals(assembly.app.getToolCount(), 3);
   assertEquals(assembly.app.hasResource(RESULTS_VIEWER_URI), true);
   assertEquals(
     (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))?.text,

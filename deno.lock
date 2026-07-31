@@ -1,7 +1,7 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@casys/mcp-server@0.24": "0.24.0",
+    "jsr:@casys/mcp-server@~0.24.1": "0.24.1",
     "jsr:@luca/esbuild-deno-loader@0.11": "0.11.1",
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/bytes@^1.0.2": "1.0.6",
@@ -20,8 +20,8 @@
     "npm:jose@6": "6.2.5"
   },
   "jsr": {
-    "@casys/mcp-server@0.24.0": {
-      "integrity": "99a562ae3ff7081ea7d1fe121f2b59eebcdbadd15132c01734e3c92cd56d6c7c",
+    "@casys/mcp-server@0.24.1": {
+      "integrity": "5163093e08b0b0e9fba8fce0688af725a24b0ba4b352bb1b2085ec375a086ece",
       "dependencies": [
         "jsr:@std/yaml",
         "npm:@modelcontextprotocol/ext-apps",
@@ -756,7 +756,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@casys/mcp-server@0.24",
+      "jsr:@casys/mcp-server@~0.24.1",
       "jsr:@std/assert@1",
       "jsr:@std/path@1",
       "jsr:@std/yaml@1",

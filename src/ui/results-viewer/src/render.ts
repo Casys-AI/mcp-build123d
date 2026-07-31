@@ -4,7 +4,15 @@ export type ViewerState =
   | { phase: "loading" }
   | { phase: "empty" }
   | { phase: "error"; message: string }
-  | { phase: "ready"; result: GeometryResult };
+  | {
+    phase: "ready";
+    result: GeometryResult;
+    model?:
+      | { phase: "loading"; name: string }
+      | { phase: "ready" }
+      | { phase: "error"; message: string }
+      | { phase: "unavailable" };
+  };
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, (char) =>
@@ -39,7 +47,58 @@ function metric(label: string, value: string, emphasis = false): string {
   }"><span>${label}</span><strong>${value}</strong></div>`;
 }
 
-function ready(result: GeometryResult): string {
+function modelViewport(
+  state: Extract<ViewerState, { phase: "ready" }>,
+): string {
+  const gltf = state.result.files.find((file) => file.format === "gltf");
+  if (!gltf) return "";
+  const model = state.model ?? { phase: "unavailable" as const };
+  const viewport = model.phase === "ready"
+    ? `<div class="cad-stage">
+        <div id="cad-viewport" role="img" aria-label="Modèle 3D interactif build123d"></div>
+        <div class="cad-reticle" aria-hidden="true"></div>
+        <div class="cad-hud" aria-live="polite">
+          <span><i></i> GLB LOCAL</span>
+          <span id="cad-mesh-count">Analyse de la scène…</span>
+        </div>
+      </div>`
+    : `<div class="cad-stage cad-stage-state" aria-live="polite">
+        <div class="cad-state-mark" aria-hidden="true">${
+      model.phase === "loading" ? "◌" : "!"
+    }</div>
+        <strong>${
+      model.phase === "loading"
+        ? "Chargement du modèle"
+        : model.phase === "error"
+        ? "Aperçu 3D indisponible"
+        : "Export GLB non relié"
+    }</strong>
+        <p>${
+      model.phase === "loading"
+        ? escapeHtml(model.name)
+        : model.phase === "error"
+        ? escapeHtml(model.message)
+        : "Réexportez ce modèle avec une version récente de mcp-build123d."
+    }</p>
+      </div>`;
+  return `<section class="panel model-panel" aria-labelledby="model-title">
+      <div class="model-head">
+        <div class="section-heading"><div><p class="eyebrow">Assemblage / espace 3D</p><h2 id="model-title">Inspection géométrique</h2></div></div>
+        <div class="cad-controls" aria-label="Commandes du modèle 3D">
+          <button type="button" data-cad-action="fit">CADRER</button>
+          <button type="button" data-cad-action="reset">RÉINITIALISER</button>
+          <button type="button" data-cad-action="wireframe" aria-pressed="false">FIL DE FER</button>
+        </div>
+      </div>
+      ${viewport}
+      <footer class="model-foot"><span>Orbit · Pan · Zoom</span><code>${
+    escapeHtml(gltf.path)
+  }</code><span>${bytes(gltf.bytes)}</span></footer>
+    </section>`;
+}
+
+function ready(state: Extract<ViewerState, { phase: "ready" }>): string {
+  const result = state.result;
   const { metrics } = result;
   const dimensions = metrics.boundingBoxMm
     ? metric("Envelope", `${point(metrics.boundingBoxMm.size)} mm`)
@@ -81,6 +140,7 @@ function ready(result: GeometryResult): string {
       ${mass}
       ${density}
     </section>
+    ${modelViewport(state)}
     <section class="split">
       <section class="panel" aria-labelledby="shape-title">
         <div class="section-heading"><p class="eyebrow">Boîte englobante</p><h2 id="shape-title">Géométrie</h2></div>
@@ -108,7 +168,7 @@ function ready(result: GeometryResult): string {
 
 /** Render only data already narrowed by parseGeometryResult; all text is escaped. */
 export function renderViewer(state: ViewerState): string {
-  if (state.phase === "ready") return ready(state.result);
+  if (state.phase === "ready") return ready(state);
   const copy = state.phase === "loading"
     ? ["Connexion à l’instrument", "Réception du résultat de calcul…"]
     : state.phase === "empty"

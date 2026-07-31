@@ -22,6 +22,10 @@ export interface ExportFile {
   format: "step" | "stl" | "gltf";
   path: string;
   bytes: number;
+  viewer?: {
+    toolName: "build123d_export_read";
+    name: string;
+  };
 }
 
 export interface GeometryResult {
@@ -34,6 +38,20 @@ export interface GeometryResult {
 export type ParseGeometryResult =
   | { ok: true; value: GeometryResult }
   | { ok: false; error: string };
+
+export type DecodeGltfArtifact =
+  | { ok: true; value: Uint8Array }
+  | { ok: false; error: string };
+
+const MAX_GLTF_ARTIFACT_BYTES = 24 * 1024 * 1024;
+
+function uint32le(bytes: Uint8Array, offset: number): number {
+  return new DataView(
+    bytes.buffer,
+    bytes.byteOffset + offset,
+    4,
+  ).getUint32(0, true);
+}
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -153,9 +171,80 @@ function files(value: unknown): ExportFile[] | string {
     }
     const bytes = number(file.bytes, `files[${index}].bytes`, true);
     if (typeof bytes === "string") return bytes;
-    parsed.push({ format: file.format, path: file.path, bytes });
+    let viewer: ExportFile["viewer"];
+    if (file.viewer !== undefined) {
+      if (file.format !== "gltf") {
+        return `files[${index}].viewer is only valid for gltf exports`;
+      }
+      const source = record(file.viewer);
+      if (
+        !source || source.toolName !== "build123d_export_read" ||
+        typeof source.name !== "string" || source.name.length > 255 ||
+        !/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.glb$/.test(source.name)
+      ) {
+        return `files[${index}].viewer is not a valid GLB viewer reference`;
+      }
+      viewer = {
+        toolName: "build123d_export_read",
+        name: source.name,
+      };
+    }
+    parsed.push({ format: file.format, path: file.path, bytes, viewer });
   }
   return parsed;
+}
+
+/** Validate, size-check and decode the app-only binary artifact envelope. */
+export function decodeGltfArtifact(value: unknown): DecodeGltfArtifact {
+  const source = record(value);
+  if (!source) return { ok: false, error: "GLB payload must be an object" };
+  if (source.schemaVersion !== "1.0" || source.kind !== "gltf-binary") {
+    return { ok: false, error: "Unsupported GLB artifact envelope" };
+  }
+  if (
+    typeof source.name !== "string" ||
+    !/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.glb$/.test(source.name)
+  ) {
+    return { ok: false, error: "GLB artifact name is invalid" };
+  }
+  if (source.mimeType !== "model/gltf-binary") {
+    return { ok: false, error: "GLB artifact MIME type is invalid" };
+  }
+  if (
+    typeof source.bytes !== "number" || !Number.isSafeInteger(source.bytes) ||
+    source.bytes < 12 || source.bytes > MAX_GLTF_ARTIFACT_BYTES
+  ) {
+    return { ok: false, error: "GLB artifact byte length is invalid" };
+  }
+  if (
+    typeof source.base64 !== "string" ||
+    source.base64.length > Math.ceil(MAX_GLTF_ARTIFACT_BYTES / 3) * 4 + 4 ||
+    !/^[a-zA-Z0-9+/]*={0,2}$/.test(source.base64)
+  ) {
+    return { ok: false, error: "GLB artifact base64 is invalid" };
+  }
+  try {
+    const raw = atob(source.base64);
+    const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
+    if (bytes.length !== source.bytes) {
+      return { ok: false, error: "GLB artifact byte length does not match" };
+    }
+    if (
+      bytes[0] !== 0x67 || bytes[1] !== 0x6c || bytes[2] !== 0x54 ||
+      bytes[3] !== 0x46
+    ) {
+      return { ok: false, error: "GLB artifact header is invalid" };
+    }
+    if (uint32le(bytes, 4) !== 2) {
+      return { ok: false, error: "GLB artifact must use version 2" };
+    }
+    if (uint32le(bytes, 8) !== bytes.length) {
+      return { ok: false, error: "GLB declared length does not match" };
+    }
+    return { ok: true, value: bytes };
+  } catch {
+    return { ok: false, error: "GLB artifact base64 cannot be decoded" };
+  }
 }
 
 /** Parse and narrow the versioned server payload before it reaches rendering. */
