@@ -50,20 +50,7 @@ No account, no API key, no network access at runtime.
 
 ## Quick Start
 
-### stdio mode (Claude Desktop / PML)
-
-```json
-{
-  "mcpServers": {
-    "cad": {
-      "command": "deno",
-      "args": ["run", "--allow-all", "jsr:@casys/mcp-build123d/server"]
-    }
-  }
-}
-```
-
-### HTTP mode
+### Stateless HTTP
 
 ```bash
 deno task serve      # port 3014
@@ -91,6 +78,19 @@ script or file contents:
 
 `kind: "export"` uses the same metrics and reports only each generated file's
 format, path and byte size.
+
+### Build the viewer
+
+The committed viewer bundle is a standalone HTML resource. To rebuild it from a
+local `@casys/mcp-view` checkout, inject that checkout for the build only:
+
+```bash
+MCP_VIEW_MODULE=file:///path/to/mcp-view/packages/view/mod.ts deno task build:ui
+```
+
+The source tree and generated HTML contain no local checkout path. The viewer
+accepts only the structured result envelopes documented above; it never runs a
+script or reads an export file.
 
 ### `build123d_execute`
 
@@ -147,7 +147,7 @@ metrics.
 
 ```
 mod.ts                  # Public API
-server.ts               # MCP server (stdio + HTTP, port 3014)
+server.ts               # Stateless HTTP MCP server (port 3014)
 src/
   api/
     harness.py          # Python side: exec script, compute metrics, export

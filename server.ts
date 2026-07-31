@@ -1,18 +1,8 @@
 /**
  * MCP Server Bootstrap for CAD Tools
  *
- * Usage in an MCP config (stdio mode):
- * {
- *   "mcpServers": {
- *     "cad": {
- *       "command": "deno",
- *       "args": ["run", "--allow-all", "jsr:@casys/mcp-build123d/server"]
- *     }
- *   }
- * }
- *
- * HTTP mode (default port: 3014):
- *   deno run --allow-all server.ts --http --port=3014
+ * Stateless HTTP server (default port: 3014):
+ *   deno run --allow-all server.ts --port=3014
  *
  * Environment:
  *   BUILD123D_PYTHON_BIN   Python interpreter with build123d (default: python3)
@@ -33,7 +23,6 @@ async function main() {
     ? categoriesArg.split("=")[1].split(",")
     : undefined;
 
-  const httpFlag = args.includes("--http");
   const portArg = args.find((arg) => arg.startsWith("--port="));
   const httpPort = portArg
     ? parseInt(portArg.split("=")[1], 10)
@@ -43,26 +32,19 @@ async function main() {
 
   const { app: server, toolsClient } = createCadMcpApp({ categories });
 
-  if (httpFlag) {
-    await server.startHttp({
-      port: httpPort,
-      hostname,
-      cors: true,
-      onListen: (info) => {
-        console.error(
-          `[mcp-build123d] HTTP server listening on http://${info.hostname}:${info.port}`,
-        );
-      },
-    });
-    console.error(
-      `[mcp-build123d] Server ready (${toolsClient.count} tools) - HTTP mode`,
-    );
-  } else {
-    await server.start();
-    console.error(
-      `[mcp-build123d] Server ready (${toolsClient.count} tools) - stdio mode`,
-    );
-  }
+  await server.startHttp({
+    port: httpPort,
+    hostname,
+    cors: true,
+    onListen: (info) => {
+      console.error(
+        `[mcp-build123d] HTTP server listening on http://${info.hostname}:${info.port}`,
+      );
+    },
+  });
+  console.error(
+    `[mcp-build123d] Server ready (${toolsClient.count} tools) - stateless HTTP`,
+  );
 
   Deno.addSignalListener("SIGINT", () => {
     console.error("[mcp-build123d] Shutting down...");
