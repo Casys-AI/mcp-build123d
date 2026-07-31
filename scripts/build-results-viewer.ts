@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-/** Build the results viewer with an injected local @casys/mcp-view checkout. */
+/** Build the results viewer against the published, exact mcp-view release. */
 
 import { dirname, fromFileUrl, join } from "@std/path";
 
@@ -17,6 +17,12 @@ try {
   await Deno.writeTextFile(
     importMap,
     JSON.stringify({
+      // Keep Deno's dependency-age quarantine for the graph except for the
+      // exact Casys package audited and published with this viewer work.
+      minimumDependencyAge: {
+        age: "P1D",
+        exclude: ["jsr:@casys/mcp-view"],
+      },
       imports: {
         "@casys/mcp-view": mcpViewModule,
         "@modelcontextprotocol/ext-apps":
@@ -31,12 +37,11 @@ try {
   const command = new Deno.Command(Deno.execPath(), {
     args: [
       "bundle",
-      "--no-config",
+      "--config",
+      importMap,
       "--check",
       "--platform=browser",
       "--minify",
-      "--import-map",
-      importMap,
       "--output",
       temporaryBundle,
       join(viewer, "src", "main.ts"),

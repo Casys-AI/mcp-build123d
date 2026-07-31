@@ -81,16 +81,18 @@ format, path and byte size.
 
 ### Build the viewer
 
-The committed viewer bundle is a standalone HTML resource. To rebuild it from a
-local `@casys/mcp-view` checkout, inject that checkout for the build only:
+The committed viewer bundle is a standalone HTML resource. Rebuild it against
+the published, exact `@casys/mcp-view@0.4.0` release:
 
 ```bash
-MCP_VIEW_MODULE=file:///path/to/mcp-view/packages/view/mod.ts deno task build:ui
+deno task build:ui
 ```
 
-The source tree and generated HTML contain no local checkout path. The viewer
-accepts only the structured result envelopes documented above; it never runs a
-script or reads an export file.
+The build retains Deno's dependency-age quarantine for the rest of the graph
+and exempts only the exact Casys-owned mcp-view release. The generated HTML
+contains no module path or runtime network dependency. The viewer accepts only
+the structured result envelopes documented above; it never runs a script or
+reads an export file.
 
 ### `build123d_execute`
 
