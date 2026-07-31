@@ -188,6 +188,41 @@ Deno.test("executeTools - tool count, category, schema coherence", () => {
       tool._meta?.ui?.resourceUri,
       "ui://mcp-build123d/results-viewer",
     );
-    assertEquals(tool.outputSchema.oneOf instanceof Array, true);
+    const output = tool.outputSchema as {
+      type: string;
+      additionalProperties: boolean;
+      required: string[];
+      properties: {
+        kind: { const: string };
+        metrics: {
+          properties: {
+            volume_mm3: { minimum: number };
+            area_mm2: { minimum: number };
+          };
+        };
+        files: { minItems?: number; maxItems?: number };
+      };
+    };
+    assertEquals(output.type, "object");
+    assertEquals(output.additionalProperties, false);
+    assertEquals(output.required, [
+      "schemaVersion",
+      "kind",
+      "metrics",
+      "files",
+    ]);
+    assertEquals(
+      output.properties.kind.const,
+      tool.name === "build123d_execute" ? "execution" : "export",
+    );
+    assertEquals(output.properties.metrics.properties.volume_mm3.minimum, 0);
+    assertEquals(output.properties.metrics.properties.area_mm2.minimum, 0);
+    if (tool.name === "build123d_execute") {
+      assertEquals(output.properties.files.maxItems, 0);
+      assertEquals(output.properties.files.minItems, undefined);
+    } else {
+      assertEquals(output.properties.files.minItems, 1);
+      assertEquals(output.properties.files.maxItems, undefined);
+    }
   }
 });
