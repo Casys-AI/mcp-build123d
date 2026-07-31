@@ -2,6 +2,25 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [0.3.0] - 2026-07-31
+
+### Added
+
+- **Interactive 3D inspection for GLB exports.** The existing results MCP App
+  now renders build123d assemblies with offline Three.js orbit, pan, zoom, fit,
+  reset and wireframe controls while retaining the metrics and export evidence.
+- **Bounded app-only GLB transport.** `build123d_export_read` accepts only a
+  safe `.glb` basename, enforces real-path containment and a configurable limit
+  (8 MiB default, 24 MiB hard maximum), and returns a versioned binary glTF
+  envelope without placing base64 in the agent-facing export result. This inline
+  transport is an MVP; large assemblies will use a stable artifact URI via
+  `resources/read`.
+
+### Changed
+
+- The viewer bundle is built against `@casys/mcp-view@0.4.1`, whose lifecycle
+  buffering registers result handling before the MCP Apps handshake completes.
+
 ## [0.2.0] - 2026-07-31
 
 ### Changed

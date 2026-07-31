@@ -2,8 +2,9 @@
 
 MCP server for **parametric CAD as code** —
 [build123d](https://github.com/gumyr/build123d) (Python, Open CASCADE kernel)
-driven by AI agents. **2 tools**: execute a script and read exact geometry
-metrics, export STEP / STL / GLTF.
+driven by AI agents. **2 agent tools** execute a script, read exact geometry
+metrics and export STEP / STL / GLTF. One app-only helper hydrates the bundled
+3D viewer without exposing another filesystem path.
 
 ```
 agent writes build123d script
@@ -56,7 +57,7 @@ No account, no API key, no network access at runtime.
 deno task serve      # port 3014
 ```
 
-## Tools (2) and result viewer
+## Tools (2 + 1 app-only helper) and result viewer
 
 Both tools expose the same optional MCP App resource,
 `ui://mcp-build123d/results-viewer`. When its HTML bundle is present at
@@ -76,23 +77,46 @@ script or file contents:
 }
 ```
 
-`kind: "export"` uses the same metrics and reports only each generated file's
-format, path and byte size.
+`kind: "export"` uses the same metrics and reports each generated file's format,
+path and byte size. A GLB also carries a bounded viewer reference:
+
+```json
+{
+  "format": "gltf",
+  "path": "/exports/assembly.glb",
+  "bytes": 204800,
+  "viewer": {
+    "toolName": "build123d_export_read",
+    "name": "assembly.glb"
+  }
+}
+```
+
+The interactive industrial CAD view supports orbit, pan, zoom, fit, reset and
+wireframe inspection. `build123d_export_read` is visible only to MCP Apps. It
+accepts a basename rather than a path, resolves the real file under
+`BUILD123D_EXPORT_DIR`, rejects symlink escapes, validates the GLB header and
+returns a versioned `model/gltf-binary` base64 envelope.
+
+This inline base64 transport is deliberately an MVP for dashboard-sized models:
+8 MiB by default (roughly 10.7 MiB before the surrounding JSON), with a 24 MiB
+hard ceiling. Large assemblies should move to a future stable artifact URI read
+through `resources/read`, rather than increasing conversational payloads.
 
 ### Build the viewer
 
 The committed viewer bundle is a standalone HTML resource. Rebuild it against
-the published, exact `@casys/mcp-view@0.4.0` release:
+the published, exact `@casys/mcp-view@0.4.1` release:
 
 ```bash
 deno task build:ui
 ```
 
-The build retains Deno's dependency-age quarantine for the rest of the graph
-and exempts only the exact Casys-owned mcp-view release. The generated HTML
-contains no module path or runtime network dependency. The viewer accepts only
-the structured result envelopes documented above; it never runs a script or
-reads an export file.
+The build retains Deno's dependency-age quarantine for the rest of the graph and
+exempts only the exact Casys-owned mcp-view release. The generated HTML contains
+no module path or runtime network dependency. The viewer accepts only the
+structured result envelopes documented above; it never runs a script and can
+read only the GLB basename explicitly returned by `build123d_export`.
 
 ### `build123d_execute`
 
@@ -140,10 +164,11 @@ metrics.
 
 ## Environment Variables
 
-| Variable               | Default         | Description                           |
-| ---------------------- | --------------- | ------------------------------------- |
-| `BUILD123D_PYTHON_BIN` | `python3`       | Python interpreter that has build123d |
-| `BUILD123D_EXPORT_DIR` | `./cad-exports` | Where `build123d_export` writes files |
+| Variable                   | Default         | Description                              |
+| -------------------------- | --------------- | ---------------------------------------- |
+| `BUILD123D_PYTHON_BIN`     | `python3`       | Python interpreter that has build123d    |
+| `BUILD123D_EXPORT_DIR`     | `./cad-exports` | Where `build123d_export` writes files    |
+| `BUILD123D_GLTF_MAX_BYTES` | `8388608`       | App payload limit; hard-capped at 24 MiB |
 
 ## Architecture
 
@@ -155,9 +180,10 @@ src/
     harness.py          # Python side: exec script, compute metrics, export
     python-bridge.ts    # Deno side: subprocess, JSON over stdin/stdout
   tools/
-    execute.ts          # build123d_execute, build123d_export
+    execute.ts          # execute, export and app-only GLB reader
+  ui/results-viewer/    # metrics plus offline Three.js CAD viewport
   client.ts             # CadToolsClient
-tests/                  # 9 tests against real build123d
+tests/                  # contract, wire, viewer and real build123d tests
 ```
 
 The bridge is a subprocess speaking JSON — the same architectural choice as

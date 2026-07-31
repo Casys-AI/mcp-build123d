@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-build123d",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "tasks": {
     "serve": "deno run --allow-all server.ts --port=3014",
     "compile": "deno compile -A --output mcp-build123d server.ts",
@@ -29,7 +29,7 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.24.0",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.24.1",
     "ajv": "npm:ajv@^8.17.1",
     "hono": "npm:hono@^4",
     "hono/cors": "npm:hono@^4/cors",
