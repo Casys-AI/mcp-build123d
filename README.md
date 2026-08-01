@@ -59,7 +59,7 @@ deno task serve      # port 3014
 
 ## Tools (2 + 1 app-only helper) and result viewer
 
-Both tools expose the same optional MCP App resource,
+Both public tools expose the same optional MCP App resource,
 `ui://mcp-build123d/results-viewer`. When its HTML bundle is present at
 `src/ui/dist/results-viewer/index.html`, compatible hosts can render the exact
 geometry result. Until then the server deliberately skips the resource and keeps
@@ -98,6 +98,29 @@ accepts a basename rather than a path, resolves the real file under
 `BUILD123D_EXPORT_DIR`, rejects symlink escapes, validates the GLB header and
 returns a versioned `model/gltf-binary` base64 envelope.
 
+### Compose components
+
+The same standalone viewer advertises a catalog of small, independently
+mountable components during `ui/initialize`. An MCP Compose dashboard chooses a
+declarative surface (component subset, order, grid and gap); without a requested
+surface, standalone mode mounts the default stack containing all four.
+
+| Component key                | Real data and behaviour                                       |
+| ---------------------------- | ------------------------------------------------------------- |
+| `build123d.geometry-status`  | computation/export status and available file identity         |
+| `build123d.geometry-metrics` | OCCT metrics, topology, optional mass and density             |
+| `build123d.geometry-canvas`  | bounded GLB fetch plus interactive Three.js scene and cleanup |
+| `build123d.export-artifacts` | exact generated formats, paths and byte sizes                 |
+
+The app-only GLB reader is bound to the non-composable
+`ui://mcp-build123d/artifact-helper-viewer`, so its binary envelope cannot be
+mistaken for a geometry component surface. Repeating a canvas component is
+supported: controls and Three.js cleanup are scoped to each surface instance.
+
+No Compose event is emitted or accepted yet. Geometry selection would be a
+meaningful future event only once the result contract exposes stable shape or
+face identifiers; emitting a generic click today would invent semantics.
+
 This inline base64 transport is deliberately an MVP for dashboard-sized models:
 8 MiB by default (roughly 10.7 MiB before the surrounding JSON), with a 24 MiB
 hard ceiling. Large assemblies should move to a future stable artifact URI read
@@ -105,11 +128,15 @@ through `resources/read`, rather than increasing conversational payloads.
 
 ### Build the viewer
 
-The committed viewer bundle is a standalone HTML resource. Rebuild it against
-the published, exact `@casys/mcp-view@0.4.1` release:
+The committed viewer bundle is a standalone HTML resource. The build script's
+published fallback remains the exact `@casys/mcp-view@0.4.1` standalone release,
+but the component-surface API currently lives in the sibling `mcp-server`
+checkout and requires the next `@casys/mcp-view` release. Until that release is
+cut, build the exact bundle served by this branch explicitly:
 
 ```bash
-deno task build:ui
+MCP_VIEW_MODULE=file:///absolute/path/to/mcp-server/packages/view/mod.ts \
+  deno task build:ui
 ```
 
 The build retains Deno's dependency-age quarantine for the rest of the graph and
@@ -181,7 +208,7 @@ src/
     python-bridge.ts    # Deno side: subprocess, JSON over stdin/stdout
   tools/
     execute.ts          # execute, export and app-only GLB reader
-  ui/results-viewer/    # metrics plus offline Three.js CAD viewport
+  ui/results-viewer/    # small CAD components plus non-composable GLB helper
   client.ts             # CadToolsClient
 tests/                  # contract, wire, viewer and real build123d tests
 ```
@@ -202,7 +229,7 @@ composes them.
 ## Development
 
 ```bash
-deno task test     # 9 tests; need python3 + build123d
+deno task test     # 31 tests; needs Python 3.10+ with build123d
 deno check mod.ts server.ts
 ```
 

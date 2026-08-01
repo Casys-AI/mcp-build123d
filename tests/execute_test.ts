@@ -349,7 +349,7 @@ Deno.test("executeTools - tool count, category, schema coherence", () => {
     }
     if (tool.name === "build123d_export_read") {
       assertEquals(tool._meta?.ui, {
-        resourceUri: "ui://mcp-build123d/results-viewer",
+        resourceUri: "ui://mcp-build123d/artifact-helper-viewer",
         visibility: ["app"],
       });
       assertEquals(

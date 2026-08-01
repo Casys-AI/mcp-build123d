@@ -2,7 +2,10 @@ import { assertEquals, assertStringIncludes } from "@std/assert";
 import { CadToolsClient } from "../src/client.ts";
 import { createCadMcpApp } from "../src/server-app.ts";
 import { geometryToolResult } from "../src/tools/execute.ts";
-import { RESULTS_VIEWER_URI } from "../src/ui/constants.ts";
+import {
+  ARTIFACT_HELPER_VIEWER_URI,
+  RESULTS_VIEWER_URI,
+} from "../src/ui/constants.ts";
 
 const PROTOCOL_VERSION = "2026-07-28";
 const PROTOCOL_KEY = "io.modelcontextprotocol/protocolVersion";
@@ -70,7 +73,7 @@ Deno.test("build123d MCP App tools publish the shared viewer and explicit output
   for (const tool of tools) {
     if (tool.name === "build123d_export_read") {
       assertEquals(tool._meta?.ui, {
-        resourceUri: RESULTS_VIEWER_URI,
+        resourceUri: ARTIFACT_HELPER_VIEWER_URI,
         visibility: ["app"],
       });
       assertEquals(
@@ -134,7 +137,7 @@ Deno.test("build123d tools/list uses the stateless 2026 wire contract", async ()
     for (const tool of body.result.tools) {
       if (tool.name === "build123d_export_read") {
         assertEquals((tool._meta as { ui: unknown }).ui, {
-          resourceUri: RESULTS_VIEWER_URI,
+          resourceUri: ARTIFACT_HELPER_VIEWER_URI,
           visibility: ["app"],
         });
         continue;
@@ -222,15 +225,21 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
         `http://127.0.0.1:${port}/@casys/mcp-build123d/0.3.1/server.ts`,
     });
     assertEquals(assembly.viewers, {
-      registered: ["results-viewer"],
+      registered: ["results-viewer", "artifact-helper-viewer"],
       skipped: [],
     });
     assertStringIncludes(
       (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))?.text ?? "",
       "published CAD result",
     );
+    assertStringIncludes(
+      (await assembly.app.readResourceContent(ARTIFACT_HELPER_VIEWER_URI))
+        ?.text ?? "",
+      "published CAD result",
+    );
     assertEquals(seen, [
       "/@casys/mcp-build123d/0.3.1/src/ui/dist/results-viewer/index.html",
+      "/@casys/mcp-build123d/0.3.1/src/ui/dist/artifact-helper-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();
@@ -253,7 +262,7 @@ Deno.test("build123d result viewer is registered when its HTML bundle exists", a
 
   assertEquals(assembly.viewers, {
     registered: ["results-viewer"],
-    skipped: [],
+    skipped: ["artifact-helper-viewer"],
   });
   assertEquals(assembly.app.getToolCount(), 3);
   assertEquals(assembly.app.hasResource(RESULTS_VIEWER_URI), true);
@@ -266,12 +275,25 @@ Deno.test("build123d result viewer is registered when its HTML bundle exists", a
 Deno.test("build123d ships the generated standalone results viewer", async () => {
   const assembly = createCadMcpApp();
   assertEquals(assembly.viewers, {
-    registered: ["results-viewer"],
+    registered: ["results-viewer", "artifact-helper-viewer"],
     skipped: [],
   });
   const html = (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))
     ?.text ?? "";
   assertStringIncludes(html, "build123d-results-viewer");
+  const helperHtml = (await assembly.app.readResourceContent(
+    ARTIFACT_HELPER_VIEWER_URI,
+  ))?.text ?? "";
+  assertStringIncludes(helperHtml, "build123d-artifact-helper-viewer");
+  assertEquals(helperHtml.includes("build123d.geometry-status"), false);
+  assertEquals(helperHtml.includes("build123d.geometry-canvas"), false);
+  assertStringIncludes(html, "io.casys.mcp.view-components/v1");
+  assertStringIncludes(html, "build123d.geometry-status");
+  assertStringIncludes(html, "build123d.geometry-metrics");
+  assertStringIncludes(html, "build123d.geometry-canvas");
+  assertStringIncludes(html, "build123d.export-artifacts");
+  assertEquals(html.includes("io.casys.mcp.composable-view/v1"), false);
+  assertEquals(html.includes("build123d-glance"), false);
   assertEquals(html.includes("__BUILD123D_VIEWER_BUNDLE__"), false);
   assertEquals(/<script[^>]+src=/i.test(html), false);
 });
@@ -284,7 +306,7 @@ Deno.test("build123d result viewer is skipped before its bundle is built", () =>
 
   assertEquals(assembly.viewers, {
     registered: [],
-    skipped: ["results-viewer"],
+    skipped: ["results-viewer", "artifact-helper-viewer"],
   });
   assertEquals(assembly.app.hasResource(RESULTS_VIEWER_URI), false);
 });

@@ -150,13 +150,17 @@ export async function mountCadScene(
     if ((object as THREE.Mesh).isMesh) meshes += 1;
   });
 
-  const fitButton = document.querySelector<HTMLButtonElement>(
+  // A declarative surface may mount the same canvas component more than once.
+  // Bind controls to this component instance, never to the whole document.
+  const componentRoot = viewport.closest<HTMLElement>(".mcp-view-component") ??
+    viewport.parentElement ?? document;
+  const fitButton = componentRoot.querySelector<HTMLButtonElement>(
     '[data-cad-action="fit"]',
   );
-  const resetButton = document.querySelector<HTMLButtonElement>(
+  const resetButton = componentRoot.querySelector<HTMLButtonElement>(
     '[data-cad-action="reset"]',
   );
-  const wireframeButton = document.querySelector<HTMLButtonElement>(
+  const wireframeButton = componentRoot.querySelector<HTMLButtonElement>(
     '[data-cad-action="wireframe"]',
   );
   const onFit = () => fit();

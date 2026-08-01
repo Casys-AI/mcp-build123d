@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-/** Build the results viewer against the published, exact mcp-view release. */
+/** Build both viewer resources against one exact mcp-view implementation. */
 
 import { dirname, fromFileUrl, join } from "@std/path";
 
@@ -11,7 +11,11 @@ const temporaryConfigDir = await Deno.makeTempDir({
   prefix: "mcp-build123d-view-",
 });
 const importMap = join(temporaryConfigDir, "import-map.json");
-const temporaryBundle = join(temporaryConfigDir, "results-viewer.js");
+const builds = [
+  { entry: "main.ts", viewer: "results-viewer" },
+  { entry: "artifact-main.ts", viewer: "artifact-helper-viewer" },
+] as const;
+const bundles = new Map<string, string>();
 
 try {
   await Deno.writeTextFile(
@@ -36,42 +40,55 @@ try {
     }),
   );
 
-  const command = new Deno.Command(Deno.execPath(), {
-    args: [
-      "bundle",
-      "--config",
-      importMap,
-      "--check",
-      "--platform=browser",
-      "--minify",
-      "--output",
-      temporaryBundle,
-      join(viewer, "src", "main.ts"),
-    ],
-  });
-  const output = await command.output();
-  if (!output.success) {
-    throw new Error(
-      `Viewer bundle failed:\n${new TextDecoder().decode(output.stderr)}`,
-    );
+  for (const build of builds) {
+    const temporaryBundle = join(temporaryConfigDir, `${build.viewer}.js`);
+    const command = new Deno.Command(Deno.execPath(), {
+      args: [
+        "bundle",
+        "--config",
+        importMap,
+        "--check",
+        "--platform=browser",
+        "--minify",
+        "--output",
+        temporaryBundle,
+        join(viewer, "src", build.entry),
+      ],
+    });
+    const output = await command.output();
+    if (!output.success) {
+      throw new Error(
+        `${build.viewer} bundle failed:\n${
+          new TextDecoder().decode(output.stderr)
+        }`,
+      );
+    }
+    const js = await Deno.readTextFile(temporaryBundle);
+    try {
+      new Function(js);
+    } catch (error) {
+      throw new Error(
+        `${build.viewer} bundle is not valid JavaScript: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    bundles.set(build.viewer, js);
   }
-  const js = await Deno.readTextFile(temporaryBundle);
-  try {
-    new Function(js);
-  } catch (error) {
-    throw new Error(
-      `Viewer bundle is not valid JavaScript: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
-  const template = await Deno.readTextFile(join(viewer, "index.html"));
-  const css = await Deno.readTextFile(join(viewer, "src", "styles.css"));
+} finally {
+  await Deno.remove(temporaryConfigDir, { recursive: true });
+}
+
+const template = await Deno.readTextFile(join(viewer, "index.html"));
+const css = await Deno.readTextFile(join(viewer, "src", "styles.css"));
+for (const build of builds) {
+  const js = bundles.get(build.viewer);
+  if (js === undefined) throw new Error(`Missing bundle for ${build.viewer}`);
   const html = template
     .replace("/*__BUILD123D_VIEWER_STYLES__*/", () => css)
     .replace("/*__BUILD123D_VIEWER_BUNDLE__*/", () => js)
     .replace(/[\t ]+\n/g, "\n");
-  const outDir = join(here, "..", "src", "ui", "dist", "results-viewer");
+  const outDir = join(here, "..", "src", "ui", "dist", build.viewer);
   await Deno.mkdir(outDir, { recursive: true });
   await Deno.writeTextFile(join(outDir, "index.html"), html);
   console.log(
@@ -79,6 +96,4 @@ try {
       Math.round(html.length / 1024)
     } KB)`,
   );
-} finally {
-  await Deno.remove(temporaryConfigDir, { recursive: true });
 }

@@ -20,7 +20,10 @@ import {
   type ExportSpec,
   runCadScript,
 } from "../api/python-bridge.ts";
-import { RESULTS_VIEWER_URI } from "../ui/constants.ts";
+import {
+  ARTIFACT_HELPER_VIEWER_URI,
+  RESULTS_VIEWER_URI,
+} from "../ui/constants.ts";
 
 const SCRIPT_DESCRIPTION =
   "build123d Python script. It must assign its final shape to a variable " +
@@ -447,7 +450,7 @@ export const executeTools: CadTool[] = [
     category: "execute",
     _meta: {
       ui: {
-        resourceUri: RESULTS_VIEWER_URI,
+        resourceUri: ARTIFACT_HELPER_VIEWER_URI,
         visibility: ["app"],
       },
     },

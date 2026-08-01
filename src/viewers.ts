@@ -1,15 +1,15 @@
 /**
  * MCP App viewer registration.
  *
- * The result viewer is deliberately optional during this server-only phase:
- * McpApp logs and skips it until `src/ui/dist/results-viewer/index.html` has
- * been built. This keeps text-only MCP clients fully usable.
+ * The viewers are deliberately optional during this server-only phase:
+ * McpApp logs and skips them until their `src/ui/dist/.../index.html` bundles
+ * have been built. This keeps text-only MCP clients fully usable.
  */
 
 import type { McpApp } from "@casys/mcp-server";
 
 const MODULE_URL = new URL("..", import.meta.url).href;
-const VIEWERS = ["results-viewer"];
+const VIEWERS = ["results-viewer", "artifact-helper-viewer"];
 
 function isRemoteUrl(path: string): boolean {
   return path.startsWith("https://") || path.startsWith("http://");
@@ -44,7 +44,7 @@ const localFilesystem: ViewerFilesystem = {
   },
 };
 
-/** Register the built result viewer, or report it skipped when absent. */
+/** Register built viewers, or report each one skipped when absent. */
 export function registerBuild123dViewers(
   app: McpApp,
   filesystem: ViewerFilesystem = localFilesystem,

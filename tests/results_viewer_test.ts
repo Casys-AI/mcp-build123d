@@ -4,6 +4,12 @@ import {
   parseGeometryResult,
 } from "../src/ui/results-viewer/src/contract.ts";
 import { renderViewer } from "../src/ui/results-viewer/src/render.ts";
+import {
+  BUILD123D_COMPONENT_KEYS,
+  BUILD123D_DEFAULT_SURFACE,
+  geometryMetricValues,
+  geometryStatusValue,
+} from "../src/ui/results-viewer/src/component-model.ts";
 
 const METRICS = {
   volume_mm3: 1000,
@@ -56,6 +62,28 @@ Deno.test("results viewer parses exactly the v1 execution and export envelopes",
     toolName: "build123d_export_read",
     name: "assembly.glb",
   });
+});
+
+Deno.test("results viewer publishes the small component catalog and standalone surface", () => {
+  assertEquals(BUILD123D_COMPONENT_KEYS, {
+    status: "build123d.geometry-status",
+    metrics: "build123d.geometry-metrics",
+    canvas: "build123d.geometry-canvas",
+    artifacts: "build123d.export-artifacts",
+  });
+  assertEquals(BUILD123D_DEFAULT_SURFACE, {
+    layout: { type: "stack", gap: "md" },
+    components: [
+      { id: "geometry-status", component: "build123d.geometry-status" },
+      { id: "geometry-metrics", component: "build123d.geometry-metrics" },
+      { id: "geometry-canvas", component: "build123d.geometry-canvas" },
+      { id: "export-artifacts", component: "build123d.export-artifacts" },
+    ],
+  });
+  assertEquals(
+    new Set(BUILD123D_DEFAULT_SURFACE.components.map((item) => item.id)).size,
+    BUILD123D_DEFAULT_SURFACE.components.length,
+  );
 });
 
 Deno.test("results viewer validates and decodes only the GLB helper envelope", () => {
@@ -169,7 +197,7 @@ Deno.test("results viewer accepts signed coordinates around the origin", () => {
   assertEquals(centered.value.metrics.boundingBoxMm?.min, [-5, -10, -2.5]);
 });
 
-Deno.test("results viewer escapes file paths and errors instead of injecting markup", () => {
+Deno.test("results viewer lifecycle errors escape markup", () => {
   const parsed = parseGeometryResult({
     schemaVersion: "1.0",
     kind: "export",
@@ -182,9 +210,10 @@ Deno.test("results viewer escapes file paths and errors instead of injecting mar
   });
   assertEquals(parsed.ok, true);
   if (!parsed.ok) return;
-  const html = renderViewer({ phase: "ready", result: parsed.value });
-  assertEquals(html.includes("<img src=x"), false);
-  assertStringIncludes(html, "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+  assertStringIncludes(
+    geometryStatusValue({ result: parsed.value }).detail,
+    '<img src=x onerror="alert(1)">',
+  );
 
   const errorHtml = renderViewer({
     phase: "error",
@@ -203,7 +232,7 @@ Deno.test("results viewer exposes loading state without leaving the host busy", 
   );
 });
 
-Deno.test("results viewer renders the interactive CAD viewport controls", () => {
+Deno.test("results viewer derives component data from the real geometry result", () => {
   const parsed = parseGeometryResult({
     schemaVersion: "1.0",
     kind: "export",
@@ -216,14 +245,48 @@ Deno.test("results viewer renders the interactive CAD viewport controls", () => 
     }],
   });
   if (!parsed.ok) throw new Error(parsed.error);
-  const html = renderViewer({
-    phase: "ready",
-    result: parsed.value,
-    model: { phase: "ready" },
+  assertEquals(geometryStatusValue({ result: parsed.value }), {
+    label: "EXPORTÉ",
+    detail: "assembly.glb · 1 solide · 6 faces",
+    tone: "success",
   });
-  assertStringIncludes(html, 'id="cad-viewport"');
-  assertStringIncludes(html, 'data-cad-action="fit"');
-  assertStringIncludes(html, 'data-cad-action="reset"');
-  assertStringIncludes(html, 'data-cad-action="wireframe"');
-  assertStringIncludes(html, "Orbit · Pan · Zoom");
+  assertEquals(geometryMetricValues({ result: parsed.value }), [
+    { id: "volume", label: "Volume", value: "1,000", unit: "mm³" },
+    { id: "surface-area", label: "Surface", value: "700", unit: "mm²" },
+    {
+      id: "bounding-envelope",
+      label: "Envelope",
+      value: "10 × 20 × 5",
+      unit: "mm",
+    },
+    {
+      id: "center-of-mass",
+      label: "Centre de masse",
+      value: "5 × 10 × 2.5",
+      unit: "mm",
+    },
+    {
+      id: "topology",
+      label: "Topologie",
+      value: "1 / 6 / 12",
+      detail: "solides / faces / arêtes",
+    },
+    { id: "mass", label: "Masse", value: "0.0027", unit: "kg" },
+    { id: "density", label: "Densité", value: "2,700", unit: "kg/m³" },
+  ]);
+});
+
+Deno.test("results viewer implements component surface and container layouts in CSS", async () => {
+  const styles = await Deno.readTextFile(
+    new URL("../src/ui/results-viewer/src/styles.css", import.meta.url),
+  );
+  assertStringIncludes(styles, "container: build123d-view / inline-size");
+  assertStringIncludes(
+    styles,
+    "@container build123d-view (max-width: 620px)",
+  );
+  assertStringIncludes(styles, ".mcp-view-surface");
+  assertStringIncludes(styles, ".mcp-view-component");
+  assertEquals(styles.includes("data-casys-projection"), false);
+  assertEquals(styles.includes("build123d-glance"), false);
 });

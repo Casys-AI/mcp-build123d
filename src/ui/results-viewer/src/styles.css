@@ -8,7 +8,6 @@
   --cad-accent: var(--color-accent, #b7e343);
   --cad-accent-ink: #182300;
   --cad-alert: #ffbf69;
-  --cad-radius: var(--border-radius-md, 8px);
   --cad-mono: var(--font-mono, "SFMono-Regular", Consolas, monospace);
   --cad-sans: var(--font-sans, "Avenir Next", "Segoe UI", sans-serif);
 }
@@ -17,40 +16,78 @@
   box-sizing: border-box;
 }
 
+html,
 body {
-  margin: 0;
   min-width: 0;
+  margin: 0;
   background: var(--cad-bg);
   color: var(--cad-text);
+}
+
+body {
   font: 14px/1.45 var(--cad-sans);
 }
 
-.instrument {
-  max-width: 980px;
+#root {
+  width: 100%;
+  max-width: 1040px;
+  min-width: 0;
   margin: 0 auto;
   padding: 20px;
+  container: build123d-view / inline-size;
   background-image: linear-gradient(90deg, color-mix(in srgb, var(--cad-line)
     22%, transparent) 1px, transparent 1px), linear-gradient(color-mix(in srgb,
     var(--cad-line) 16%, transparent) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-.masthead,
-.section-heading,
-.metric,
-.coordinate,
-.exports li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+.mcp-view-surface,
+.mcp-view-component {
+  width: 100%;
+  min-width: 0;
 }
 
-.masthead {
-  border-bottom: 2px solid var(--cad-accent);
-  padding: 0 0 16px;
-  margin-bottom: 16px;
+.mcp-view-component[data-primitive="status"],
+.mcp-view-component[data-primitive="metric-grid"],
+.panel {
+  border: 1px solid var(--cad-line) !important;
+  background: color-mix(in srgb, var(--cad-panel) 94%, transparent) !important;
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--cad-bg) 70%, #000);
 }
+
+.mcp-view-component[data-primitive="status"] {
+  border-left: 4px solid var(--cad-accent) !important;
+  color: var(--cad-muted);
+  font-family: var(--cad-mono);
+}
+
+.mcp-view-component[data-primitive="status"] strong {
+  color: var(--cad-accent);
+  letter-spacing: .08em;
+}
+
+.mcp-view-component[data-primitive="metric-grid"] article {
+  border-color: var(--cad-line) !important;
+  border-radius: 0 !important;
+  background: var(--cad-panel) !important;
+  color: var(--cad-muted);
+}
+
+.mcp-view-component[data-primitive="metric-grid"] article strong {
+  color: var(--cad-text);
+  font-family: var(--cad-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.mcp-view-component[data-primitive="metric-grid"] article[data-metric="volume"] strong,
+.mcp-view-component[data-primitive="metric-grid"] article[data-metric="surface-area"] strong {
+  color: var(--cad-accent);
+}
+
+.panel {
+  padding: 16px;
+}
+
 .eyebrow {
   margin: 0 0 3px;
   color: var(--cad-muted);
@@ -58,42 +95,35 @@ body {
   letter-spacing: .11em;
   text-transform: uppercase;
 }
+
 h1,
 h2 {
   margin: 0;
   font-weight: 650;
   letter-spacing: -.025em;
 }
+
 h1 {
   font-size: clamp(24px, 5vw, 34px);
 }
+
 h2 {
   font-size: 17px;
 }
-.status {
-  align-self: center;
-  padding: 5px 8px;
-  color: var(--cad-accent-ink);
-  background: var(--cad-accent);
-  font: 800 11px/1 var(--cad-mono);
-  letter-spacing: .08em;
-}
-.status.export {
-  background: var(--cad-alert);
-}
 
-.panel {
-  border: 1px solid var(--cad-line);
-  background: color-mix(in srgb, var(--cad-panel) 92%, transparent);
-  padding: 16px;
-  box-shadow: 5px 5px 0 color-mix(in srgb, var(--cad-bg) 70%, #000);
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .model-panel {
-  margin-top: 16px;
   padding: 0;
   overflow: hidden;
-  border-color: color-mix(in srgb, var(--cad-accent) 42%, var(--cad-line));
+  border-color: color-mix(in srgb, var(--cad-accent) 42%, var(--cad-line))
+    !important;
 }
 
 .model-head,
@@ -150,19 +180,19 @@ h2 {
 
 .cad-stage {
   position: relative;
-  min-height: 440px;
+  height: clamp(220px, 52vh, 440px);
   isolation: isolate;
   overflow: hidden;
   background: #07100f;
 }
 
-#cad-viewport {
+.cad-viewport {
   position: absolute;
   inset: 0;
   touch-action: none;
 }
 
-#cad-viewport canvas {
+.cad-viewport canvas {
   display: block;
   width: 100%;
   height: 100%;
@@ -210,7 +240,8 @@ h2 {
 
 .cad-stage-state {
   display: grid;
-  min-height: 280px;
+  height: auto;
+  min-height: 220px;
   place-content: center;
   justify-items: center;
   padding: 32px;
@@ -255,133 +286,77 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.primary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1px;
-  padding: 1px;
-  background: var(--cad-line);
-}
-.metric {
-  min-height: 74px;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 12px;
-  background: var(--cad-panel);
-}
-.metric span,
-.coordinate span {
-  color: var(--cad-muted);
-  font-size: 12px;
-}
-.metric strong {
-  font: 600 16px/1.2 var(--cad-mono);
-  font-variant-numeric: tabular-nums;
-}
-.metric-emphasis strong {
-  color: var(--cad-accent);
-  font-size: 20px;
-}
-.split {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 16px;
-}
-.section-heading {
-  margin-bottom: 14px;
-}
-.coordinate {
-  padding: 10px 0;
-  border-top: 1px solid var(--cad-line);
-}
+
 code {
   overflow-wrap: anywhere;
   color: var(--cad-text);
   font: 12px/1.4 var(--cad-mono);
 }
-.topology {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  background: var(--cad-line);
-}
-.topology span {
-  display: grid;
-  gap: 4px;
-  padding: 12px 8px;
-  background: var(--cad-panel);
-  color: var(--cad-muted);
-  text-align: center;
-  font-size: 12px;
-}
-.topology b {
-  color: var(--cad-accent);
-  font: 700 24px/1 var(--cad-mono);
-}
-.exports {
-  margin-top: 16px;
-}
+
 .exports ul {
   list-style: none;
   padding: 0;
   margin: 12px 0 0;
   border-top: 1px solid var(--cad-line);
 }
+
 .exports li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   padding: 10px 0;
   border-bottom: 1px solid var(--cad-line);
 }
+
 .exports li code {
   flex: 1;
 }
+
 .exports li > span:last-child {
   color: var(--cad-muted);
   font: 12px var(--cad-mono);
   white-space: nowrap;
 }
+
 .file-format {
   min-width: 42px;
   color: var(--cad-accent);
   font: 700 11px var(--cad-mono);
   text-transform: uppercase;
 }
+
 .note {
   margin: 12px 0 0;
   color: var(--cad-muted);
   font-size: 12px;
 }
+
+.instrument {
+  width: 100%;
+}
+
 .state {
   min-height: 220px;
   display: grid;
   align-content: center;
   gap: 8px;
 }
+
 .state > p:last-child {
   max-width: 54ch;
   margin: 0;
   color: var(--cad-muted);
 }
 
-@media (max-width: 620px) {
-  .instrument {
-    padding: 14px;
-  }
-  .masthead {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .split {
-    grid-template-columns: 1fr;
-  }
+@container build123d-view (max-width: 620px) {
   .model-head,
   .model-foot {
     align-items: flex-start;
     flex-direction: column;
   }
   .cad-stage {
-    min-height: 340px;
+    height: clamp(210px, 46vh, 340px);
   }
   .model-foot code {
     max-width: 100%;
@@ -393,5 +368,11 @@ code {
   }
   .exports li code {
     flex-basis: calc(100% - 54px);
+  }
+}
+
+@media (max-width: 620px) {
+  #root {
+    padding: 12px;
   }
 }
