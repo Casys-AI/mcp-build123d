@@ -6,7 +6,11 @@ import { dirname, fromFileUrl, join } from "@std/path";
 const here = dirname(fromFileUrl(import.meta.url));
 const viewer = join(here, "..", "src", "ui", "results-viewer");
 const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ??
-  "jsr:@casys/mcp-view@0.4.1";
+  "jsr:@casys/mcp-view@0.7.0";
+const mcpViewPreactModule = Deno.env.get("MCP_VIEW_PREACT_MODULE") ??
+  (mcpViewModule.startsWith("jsr:")
+    ? `${mcpViewModule}/preact`
+    : mcpViewModule.replace(/(?:mod|index)\.tsx?$/, "preact.ts"));
 const temporaryConfigDir = await Deno.makeTempDir({
   prefix: "mcp-build123d-view-",
 });
@@ -21,6 +25,10 @@ try {
   await Deno.writeTextFile(
     importMap,
     JSON.stringify({
+      compilerOptions: {
+        jsx: "react-jsx",
+        jsxImportSource: "preact",
+      },
       // Keep Deno's dependency-age quarantine for the graph except for the
       // exact Casys package audited and published with this viewer work.
       minimumDependencyAge: {
@@ -29,11 +37,17 @@ try {
       },
       imports: {
         "@casys/mcp-view": mcpViewModule,
+        "@casys/mcp-view/preact": mcpViewPreactModule,
         "@modelcontextprotocol/ext-apps":
           "npm:@modelcontextprotocol/ext-apps@^1.7.4",
         "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
         "@modelcontextprotocol/sdk/types.js":
           "npm:@modelcontextprotocol/sdk@^1.29.0/types.js",
+        // Keep the application JSX/hooks on the same compatible Preact
+        // instance resolved by @casys/mcp-view. Two exact versions can leave
+        // precompiled VNodes invisible to the renderer without throwing.
+        "preact": "npm:preact@^10.28.3",
+        "preact/hooks": "npm:preact@^10.28.3/hooks",
         "three": "npm:three@0.172.0",
         "three/": "npm:/three@0.172.0/",
       },

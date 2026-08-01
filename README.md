@@ -105,6 +105,11 @@ mountable components during `ui/initialize`. An MCP Compose dashboard chooses a
 declarative surface (component subset, order, grid and gap); without a requested
 surface, standalone mode mounts the default stack containing all four.
 
+Every component is a Preact component built from the shared `@casys/mcp-view`
+presentation primitives (`Card`, `Badge`, `MetricGrid`, `KeyValueList`,
+`DataTable`, `Button`, `Toolbar` and system states). The local stylesheet owns
+only the Three.js viewport and CAD-specific responsive layout.
+
 | Component key                | Real data and behaviour                                       |
 | ---------------------------- | ------------------------------------------------------------- |
 | `build123d.geometry-status`  | computation/export status and available file identity         |
@@ -128,14 +133,14 @@ through `resources/read`, rather than increasing conversational payloads.
 
 ### Build the viewer
 
-The committed viewer bundle is a standalone HTML resource. The build script's
-published fallback remains the exact `@casys/mcp-view@0.4.1` standalone release,
-but the component-surface API currently lives in the sibling `mcp-server`
-checkout and requires the next `@casys/mcp-view` release. Until that release is
-cut, build the exact bundle served by this branch explicitly:
+The committed viewer bundle is a standalone HTML resource. A normal
+`deno task build:ui` uses the published `@casys/mcp-view@0.7.0` component API.
+To develop both repositories together, the exact bundle can instead be built
+against a sibling `mcp-server` checkout explicitly:
 
 ```bash
 MCP_VIEW_MODULE=file:///absolute/path/to/mcp-server/packages/view/mod.ts \
+MCP_VIEW_PREACT_MODULE=file:///absolute/path/to/mcp-server/packages/view/preact.ts \
   deno task build:ui
 ```
 

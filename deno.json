@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-build123d",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "tasks": {
     "serve": "deno run --allow-all server.ts --port=3014",
     "compile": "deno compile -A --output mcp-build123d server.ts",
@@ -16,7 +16,11 @@
     "include": [
       "mod.ts",
       "server.ts",
+      "scripts/build-results-viewer.ts",
       "src/**/*.ts",
+      "src/**/*.tsx",
+      "src/**/*.css",
+      "src/**/*.html",
       "src/ui/dist/**/*.html",
       "src/api/harness.py",
       "README.md",

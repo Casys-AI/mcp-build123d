@@ -2,6 +2,18 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [Unreleased]
+
+## [0.4.0] - 2026-08-01
+
+### Changed
+
+- **The results viewer now consumes the shared `@casys/mcp-view` Preact
+  component library.** Status, identity, metrics, tables, controls and system
+  states use the same presentation language as the ERPNext components. Local CSS
+  is limited to the Three.js viewport and CAD-specific layout, while the
+  existing GLB tool call, controls and per-instance WebGL cleanup are retained.
+
 ## [0.3.1] - 2026-07-31
 
 ### Fixed

@@ -4,14 +4,12 @@ import {
   componentCatalogCapabilities,
   createMcpApp,
   defineView,
+  installMcpViewTheme,
   mountComponentSurface,
   readSurfaceContext,
 } from "@casys/mcp-view";
 import type { AppHandle, MountedComponentSurface } from "@casys/mcp-view";
-import {
-  BUILD123D_COMPONENT_REGISTRY,
-  type GeometryComponentAppContext,
-} from "./components.ts";
+import { BUILD123D_COMPONENT_REGISTRY } from "./components.tsx";
 import type { GeometryComponentData } from "./component-model.ts";
 import { parseGeometryResult } from "./contract.ts";
 import { renderViewer, type ViewerState } from "./render.ts";
@@ -19,6 +17,7 @@ import { renderViewer, type ViewerState } from "./render.ts";
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("results viewer root is missing");
 const root: HTMLElement = rootElement;
+installMcpViewTheme();
 
 const statusView = defineView<ViewerState>({
   render: (ctx) => renderViewer(ctx.state),
@@ -60,7 +59,7 @@ async function mountGeometrySurface(
     root,
     registry: BUILD123D_COMPONENT_REGISTRY,
     data,
-    appContext: handle.ctx as GeometryComponentAppContext,
+    appContext: handle.ctx,
     hostContext: handle.ctx.hostContext,
   });
   if (disposed || sequence !== renderSequence) {

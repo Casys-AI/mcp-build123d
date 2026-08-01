@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 
-import { createMcpApp, defineView } from "@casys/mcp-view";
+import { createMcpApp, defineView, installMcpViewTheme } from "@casys/mcp-view";
 
 type ArtifactHelperState =
   | { phase: "loading" }
@@ -11,6 +11,7 @@ type ArtifactHelperState =
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("artifact helper viewer root is missing");
 const root: HTMLElement = rootElement;
+installMcpViewTheme();
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, (char) =>
@@ -41,9 +42,9 @@ const statusView = defineView<ArtifactHelperState>({
   render(ctx) {
     const state = ctx.state;
     if (state.phase === "ready") {
-      return `<main class="instrument state" aria-busy="false"><p class="eyebrow">build123d / app helper</p><h1>Artefact GLB chargé</h1><p><code>${
+      return `<main class="mcp-view-state lifecycle-state" data-tone="success" aria-busy="false"><strong>Artefact GLB chargé</strong><div class="mcp-view-state-detail"><code>${
         escapeHtml(state.name)
-      }</code> · ${state.bytes.toLocaleString()} octets</p></main>`;
+      }</code> · ${state.bytes.toLocaleString()} octets</div></main>`;
     }
     const copy = state.phase === "loading"
       ? ["Chargement de l’artefact", "Réception du GLB local…"]
@@ -53,11 +54,13 @@ const statusView = defineView<ArtifactHelperState>({
         "Cette ressource est appelée par le viewer géométrique.",
       ]
       : ["Artefact non affichable", state.message];
-    return `<main class="instrument state" aria-busy="${
+    return `<main class="mcp-view-state lifecycle-state" aria-busy="${
       state.phase === "loading"
-    }"><p class="eyebrow">build123d / app helper</p><h1>${copy[0]}</h1><p>${
+    }" data-tone="${state.phase === "error" ? "danger" : "info"}"><strong>${
+      copy[0]
+    }</strong><div class="mcp-view-state-detail">${
       escapeHtml(copy[1])
-    }</p></main>`;
+    }</div></main>`;
   },
 });
 
@@ -99,12 +102,12 @@ async function boot(): Promise<void> {
 
 boot().catch((error) => {
   root.innerHTML =
-    `<main class="instrument state" aria-busy="false"><p class="eyebrow">build123d / app helper</p><h1>Viewer indisponible</h1><p>${
+    `<main class="mcp-view-state lifecycle-state" data-tone="danger" aria-busy="false"><strong>Viewer indisponible</strong><div class="mcp-view-state-detail">${
       escapeHtml(
         error instanceof Error
           ? error.message
           : "Connexion MCP Apps impossible.",
       )
-    }</p></main>`;
+    }</div></main>`;
   root.setAttribute("aria-busy", "false");
 });

@@ -202,7 +202,7 @@ Deno.test("build123d server/discover uses the 2026-07-28 stateless wire without 
     );
     assertEquals(body.result.serverInfo, {
       name: "mcp-build123d",
-      version: "0.3.1",
+      version: "0.4.0",
     });
   } finally {
     await http.shutdown();
@@ -222,7 +222,7 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
   try {
     const assembly = createCadMcpApp({
       viewerModuleUrl:
-        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.3.1/server.ts`,
+        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.4.0/server.ts`,
     });
     assertEquals(assembly.viewers, {
       registered: ["results-viewer", "artifact-helper-viewer"],
@@ -238,8 +238,8 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
       "published CAD result",
     );
     assertEquals(seen, [
-      "/@casys/mcp-build123d/0.3.1/src/ui/dist/results-viewer/index.html",
-      "/@casys/mcp-build123d/0.3.1/src/ui/dist/artifact-helper-viewer/index.html",
+      "/@casys/mcp-build123d/0.4.0/src/ui/dist/results-viewer/index.html",
+      "/@casys/mcp-build123d/0.4.0/src/ui/dist/artifact-helper-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();

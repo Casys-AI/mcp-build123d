@@ -276,17 +276,37 @@ Deno.test("results viewer derives component data from the real geometry result",
   ]);
 });
 
-Deno.test("results viewer implements component surface and container layouts in CSS", async () => {
+Deno.test("results viewer keeps only CAD layout CSS beside shared Preact components", async () => {
   const styles = await Deno.readTextFile(
     new URL("../src/ui/results-viewer/src/styles.css", import.meta.url),
+  );
+  const components = await Deno.readTextFile(
+    new URL("../src/ui/results-viewer/src/components.tsx", import.meta.url),
   );
   assertStringIncludes(styles, "container: build123d-view / inline-size");
   assertStringIncludes(
     styles,
     "@container build123d-view (max-width: 620px)",
   );
-  assertStringIncludes(styles, ".mcp-view-surface");
-  assertStringIncludes(styles, ".mcp-view-component");
+  assertEquals(styles.includes(".mcp-view-card {"), false);
+  assertEquals(styles.includes(".mcp-view-metrics {"), false);
+  assertEquals(styles.includes(".mcp-view-table {"), false);
+  for (
+    const shared of [
+      "Badge",
+      "Button",
+      "Card",
+      "DataTable",
+      "EmptyState",
+      "KeyValueList",
+      "MetricGrid",
+      "StateMessage",
+      "Toolbar",
+      "definePreactComponent",
+    ]
+  ) {
+    assertStringIncludes(components, shared);
+  }
   assertEquals(styles.includes("data-casys-projection"), false);
   assertEquals(styles.includes("build123d-glance"), false);
 });

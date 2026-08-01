@@ -10,6 +10,7 @@ export interface CadSceneController {
   readonly nodes: number;
   fit(): void;
   reset(): void;
+  setWireframe(enabled: boolean): void;
   dispose(): void;
 }
 
@@ -51,7 +52,7 @@ export async function mountCadScene(
   viewport.replaceChildren(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x07100f);
+  scene.background = new THREE.Color(0x100e0c);
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 100000);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -60,11 +61,11 @@ export async function mountCadScene(
   controls.screenSpacePanning = true;
   controls.zoomToCursor = true;
 
-  scene.add(new THREE.HemisphereLight(0xccece5, 0x18211e, 2.1));
+  scene.add(new THREE.HemisphereLight(0xf5e9dc, 0x211c18, 2.1));
   const key = new THREE.DirectionalLight(0xffffff, 3.2);
   key.position.set(4, 6, 5);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0xb7e343, 1.8);
+  const rim = new THREE.DirectionalLight(0xe49a53, 1.8);
   rim.position.set(-5, 2, -4);
   scene.add(rim);
 
@@ -99,15 +100,15 @@ export async function mountCadScene(
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
   const radius = Math.max(size.length() * 0.5, 0.001);
-  scene.fog = new THREE.FogExp2(0x07100f, 0.12 / radius);
+  scene.fog = new THREE.FogExp2(0x100e0c, 0.12 / radius);
 
   const gridSize = Math.max(Math.ceil(Math.max(size.x, size.z) * 1.8), 10);
   const gridDivisions = Math.min(Math.max(Math.round(gridSize / 10), 10), 80);
   const grid = new THREE.GridHelper(
     gridSize,
     gridDivisions,
-    0xb7e343,
-    0x243a35,
+    0xe49a53,
+    0x3b3129,
   );
   grid.position.y = bounds.min.y;
   (grid.material as THREE.Material).opacity = 0.42;
@@ -150,23 +151,8 @@ export async function mountCadScene(
     if ((object as THREE.Mesh).isMesh) meshes += 1;
   });
 
-  // A declarative surface may mount the same canvas component more than once.
-  // Bind controls to this component instance, never to the whole document.
-  const componentRoot = viewport.closest<HTMLElement>(".mcp-view-component") ??
-    viewport.parentElement ?? document;
-  const fitButton = componentRoot.querySelector<HTMLButtonElement>(
-    '[data-cad-action="fit"]',
-  );
-  const resetButton = componentRoot.querySelector<HTMLButtonElement>(
-    '[data-cad-action="reset"]',
-  );
-  const wireframeButton = componentRoot.querySelector<HTMLButtonElement>(
-    '[data-cad-action="wireframe"]',
-  );
-  const onFit = () => fit();
-  const onReset = () => reset();
-  const onWireframe = () => {
-    wireframe = !wireframe;
+  const setWireframe = (enabled: boolean): void => {
+    wireframe = enabled;
     model.traverse((object: THREE.Object3D) => {
       const mesh = object as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -175,11 +161,7 @@ export async function mountCadScene(
         : [mesh.material];
       for (const material of materials) materialWireframe(material, wireframe);
     });
-    wireframeButton?.setAttribute("aria-pressed", String(wireframe));
   };
-  fitButton?.addEventListener("click", onFit);
-  resetButton?.addEventListener("click", onReset);
-  wireframeButton?.addEventListener("click", onWireframe);
 
   const resize = (): void => {
     const width = Math.max(viewport.clientWidth, 1);
@@ -208,14 +190,12 @@ export async function mountCadScene(
     nodes,
     fit,
     reset,
+    setWireframe,
     dispose() {
       if (disposed) return;
       disposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
-      fitButton?.removeEventListener("click", onFit);
-      resetButton?.removeEventListener("click", onReset);
-      wireframeButton?.removeEventListener("click", onWireframe);
       controls.dispose();
       model.traverse((object: THREE.Object3D) => {
         const mesh = object as THREE.Mesh;

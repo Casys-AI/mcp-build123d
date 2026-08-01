@@ -1,181 +1,34 @@
 :root {
-  color-scheme: light dark;
-  --cad-bg: var(--color-background-primary, #101717);
-  --cad-panel: var(--color-background-secondary, #172323);
-  --cad-text: var(--color-text-primary, #e9f0e8);
-  --cad-muted: var(--color-text-secondary, #9eb0a6);
-  --cad-line: var(--color-border-primary, #3d514b);
-  --cad-accent: var(--color-accent, #b7e343);
-  --cad-accent-ink: #182300;
-  --cad-alert: #ffbf69;
+  --cad-line: var(--mcp-view-border);
+  --cad-accent: var(--mcp-view-accent);
   --cad-mono: var(--font-mono, "SFMono-Regular", Consolas, monospace);
-  --cad-sans: var(--font-sans, "Avenir Next", "Segoe UI", sans-serif);
-}
-
-* {
-  box-sizing: border-box;
 }
 
 html,
 body {
   min-width: 0;
   margin: 0;
-  background: var(--cad-bg);
-  color: var(--cad-text);
-}
-
-body {
-  font: 14px/1.45 var(--cad-sans);
+  background: transparent;
 }
 
 #root {
   width: 100%;
-  max-width: 1040px;
   min-width: 0;
-  margin: 0 auto;
-  padding: 20px;
+  padding: 0.65rem;
   container: build123d-view / inline-size;
-  background-image: linear-gradient(90deg, color-mix(in srgb, var(--cad-line)
-    22%, transparent) 1px, transparent 1px), linear-gradient(color-mix(in srgb,
-    var(--cad-line) 16%, transparent) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-.mcp-view-surface,
-.mcp-view-component {
-  width: 100%;
-  min-width: 0;
-}
-
-.mcp-view-component[data-primitive="status"],
-.mcp-view-component[data-primitive="metric-grid"],
-.panel {
-  border: 1px solid var(--cad-line) !important;
-  background: color-mix(in srgb, var(--cad-panel) 94%, transparent) !important;
-  box-shadow: 5px 5px 0 color-mix(in srgb, var(--cad-bg) 70%, #000);
-}
-
-.mcp-view-component[data-primitive="status"] {
-  border-left: 4px solid var(--cad-accent) !important;
-  color: var(--cad-muted);
-  font-family: var(--cad-mono);
-}
-
-.mcp-view-component[data-primitive="status"] strong {
-  color: var(--cad-accent);
-  letter-spacing: .08em;
-}
-
-.mcp-view-component[data-primitive="metric-grid"] article {
-  border-color: var(--cad-line) !important;
-  border-radius: 0 !important;
-  background: var(--cad-panel) !important;
-  color: var(--cad-muted);
-}
-
-.mcp-view-component[data-primitive="metric-grid"] article strong {
-  color: var(--cad-text);
-  font-family: var(--cad-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.mcp-view-component[data-primitive="metric-grid"] article[data-metric="volume"] strong,
-.mcp-view-component[data-primitive="metric-grid"] article[data-metric="surface-area"] strong {
-  color: var(--cad-accent);
-}
-
-.panel {
-  padding: 16px;
-}
-
-.eyebrow {
-  margin: 0 0 3px;
-  color: var(--cad-muted);
-  font: 700 11px/1.2 var(--cad-mono);
-  letter-spacing: .11em;
-  text-transform: uppercase;
-}
-
-h1,
-h2 {
-  margin: 0;
-  font-weight: 650;
-  letter-spacing: -.025em;
-}
-
-h1 {
-  font-size: clamp(24px, 5vw, 34px);
-}
-
-h2 {
-  font-size: 17px;
-}
-
-.section-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
 }
 
 .model-panel {
   padding: 0;
   overflow: hidden;
-  border-color: color-mix(in srgb, var(--cad-accent) 42%, var(--cad-line))
-    !important;
 }
 
-.model-head,
-.model-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.model-head {
-  min-height: 64px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--cad-line);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cad-panel) 94%,
-    #000), var(--cad-panel));
-}
-
-.model-head .section-heading {
+.model-panel > .mcp-view-card-header {
+  min-height: 4rem;
   margin: 0;
-}
-
-.cad-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.cad-controls button {
-  appearance: none;
-  min-height: 30px;
-  border: 1px solid var(--cad-line);
-  border-radius: 0;
-  padding: 0 10px;
-  background: var(--cad-bg);
-  color: var(--cad-text);
-  cursor: pointer;
-  font: 700 10px/1 var(--cad-mono);
-  letter-spacing: .07em;
-}
-
-.cad-controls button:hover,
-.cad-controls button:focus-visible {
-  outline: none;
-  border-color: var(--cad-accent);
-  color: var(--cad-accent);
-}
-
-.cad-controls button[aria-pressed="true"] {
-  border-color: var(--cad-accent);
-  background: var(--cad-accent);
-  color: var(--cad-accent-ink);
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--cad-line);
+  background: var(--mcp-view-subtle);
 }
 
 .cad-stage {
@@ -183,7 +36,7 @@ h2 {
   height: clamp(220px, 52vh, 440px);
   isolation: isolate;
   overflow: hidden;
-  background: #07100f;
+  background: #100e0c;
 }
 
 .cad-viewport {
@@ -206,173 +59,93 @@ h2 {
   height: 26px;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  opacity: .3;
+  opacity: 0.3;
   background: linear-gradient(var(--cad-accent), var(--cad-accent)) center / 1px
-    100% no-repeat, linear-gradient(90deg, var(--cad-accent),
-    var(--cad-accent)) center / 100% 1px no-repeat;
+    100% no-repeat,
+    linear-gradient(90deg, var(--cad-accent), var(--cad-accent)) center / 100%
+    1px no-repeat;
 }
 
 .cad-hud {
   position: absolute;
   z-index: 3;
-  top: 12px;
-  right: 12px;
+  top: 0.75rem;
+  right: 0.75rem;
   display: grid;
   justify-items: end;
-  gap: 4px;
+  gap: 0.3rem;
   pointer-events: none;
-  color: #a8bbb2;
-  font: 700 10px/1.25 var(--cad-mono);
-  letter-spacing: .06em;
+  color: #c5b7aa;
+  font: 700 0.65rem/1.25 var(--cad-mono);
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   text-shadow: 0 1px 2px #000;
 }
 
-.cad-hud i {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 5px;
-  border-radius: 50%;
-  background: var(--cad-accent);
-  box-shadow: 0 0 8px var(--cad-accent);
-}
-
-.cad-stage-state {
+.cad-state-overlay {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
   display: grid;
-  height: auto;
-  min-height: 220px;
-  place-content: center;
-  justify-items: center;
-  padding: 32px;
-  text-align: center;
-}
-
-.cad-stage-state .cad-state-mark {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  margin-bottom: 14px;
   place-items: center;
-  border: 1px solid var(--cad-accent);
-  color: var(--cad-accent);
-  font: 26px/1 var(--cad-mono);
+  padding: 1rem;
+  background: rgba(16, 14, 12, 0.88);
 }
 
-.cad-stage-state p {
-  max-width: 52ch;
-  margin: 7px 0 0;
-  color: var(--cad-muted);
-}
-
-.cad-stage-state strong {
-  font-size: 18px;
+.cad-state-overlay .mcp-view-state {
+  width: min(100%, 34rem);
+  background: color-mix(in srgb, var(--mcp-view-panel) 88%, transparent);
 }
 
 .model-foot {
-  min-height: 38px;
-  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.4rem;
+  padding: 0.5rem 0.85rem;
   border-top: 1px solid var(--cad-line);
-  color: var(--cad-muted);
-  font: 10px/1.25 var(--cad-mono);
+  color: var(--mcp-view-muted);
+  font: 0.65rem/1.25 var(--cad-mono);
   text-transform: uppercase;
 }
 
 .model-foot code {
   flex: 1;
   overflow: hidden;
-  color: var(--cad-muted);
+  color: var(--mcp-view-muted);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-code {
-  overflow-wrap: anywhere;
-  color: var(--cad-text);
-  font: 12px/1.4 var(--cad-mono);
+.mcp-view-table code,
+.mcp-view-key-value dd {
+  font-family: var(--cad-mono);
 }
 
-.exports ul {
-  list-style: none;
-  padding: 0;
-  margin: 12px 0 0;
-  border-top: 1px solid var(--cad-line);
-}
-
-.exports li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--cad-line);
-}
-
-.exports li code {
-  flex: 1;
-}
-
-.exports li > span:last-child {
-  color: var(--cad-muted);
-  font: 12px var(--cad-mono);
-  white-space: nowrap;
-}
-
-.file-format {
-  min-width: 42px;
-  color: var(--cad-accent);
-  font: 700 11px var(--cad-mono);
-  text-transform: uppercase;
-}
-
-.note {
-  margin: 12px 0 0;
-  color: var(--cad-muted);
-  font-size: 12px;
-}
-
-.instrument {
-  width: 100%;
-}
-
-.state {
-  min-height: 220px;
-  display: grid;
-  align-content: center;
-  gap: 8px;
-}
-
-.state > p:last-child {
-  max-width: 54ch;
-  margin: 0;
-  color: var(--cad-muted);
+.lifecycle-state {
+  min-height: 14rem;
 }
 
 @container build123d-view (max-width: 620px) {
-  .model-head,
   .model-foot {
     align-items: flex-start;
     flex-direction: column;
   }
+
   .cad-stage {
     height: clamp(210px, 46vh, 340px);
   }
+
   .model-foot code {
     max-width: 100%;
     text-align: left;
-  }
-  .exports li {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-  .exports li code {
-    flex-basis: calc(100% - 54px);
   }
 }
 
 @media (max-width: 620px) {
   #root {
-    padding: 12px;
+    padding: 0.45rem;
   }
 }

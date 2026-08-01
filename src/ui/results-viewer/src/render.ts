@@ -1,7 +1,10 @@
-export type ViewerState =
-  | { phase: "loading" }
-  | { phase: "empty" }
-  | { phase: "error"; message: string };
+import type { GeometryComponentData } from "./component-model.ts";
+
+export interface ViewerState {
+  phase: "loading" | "empty" | "error";
+  message?: string;
+  currentData?: GeometryComponentData;
+}
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, (char) =>
@@ -23,10 +26,12 @@ export function renderViewer(state: ViewerState): string {
       "En attente d’une mesure",
       "Lancez build123d_execute ou build123d_export pour afficher le résultat exact.",
     ]
-    : ["Résultat non affichable", state.message];
-  return `<main class="instrument state" aria-busy="${
-    state.phase === "loading"
-  }" aria-live="polite"><p class="eyebrow">build123d / métrologie</p><h1>${
+    : ["Résultat non affichable", state.message ?? "Erreur inconnue"];
+  return `<main class="mcp-view-state lifecycle-state" data-tone="${
+    state.phase === "error" ? "danger" : "info"
+  }" aria-busy="${state.phase === "loading"}" aria-live="polite"><strong>${
     copy[0]
-  }</h1><p>${escapeHtml(copy[1])}</p></main>`;
+  }</strong><div class="mcp-view-state-detail">${
+    escapeHtml(copy[1])
+  }</div></main>`;
 }
