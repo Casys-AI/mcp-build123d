@@ -189,6 +189,11 @@ name.
 
 ### `build123d_export`
 
+Every entry in `files[]` contains `format`, `path`, `bytes`, and `sha256`.
+`sha256` identifies the exact bytes written by that export; downstream tools
+should copy the file, recompute the digest on their private snapshot, and reject
+an `expected_step_sha256` mismatch before processing it.
+
 Same execution, plus files. `formats`: `step` (exact BREP), `stl` (mesh), `gltf`
 (binary `.glb`). Files land under `BUILD123D_EXPORT_DIR` (default
 `./cad-exports`); the response returns paths and sizes, along with the same

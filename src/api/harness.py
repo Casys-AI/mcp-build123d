@@ -18,6 +18,9 @@ no default density: without an explicit density there is no mass in the
 output at all.
 """
 
+from __future__ import annotations
+
+import hashlib
 import json
 import sys
 import traceback
@@ -127,8 +130,19 @@ def main() -> None:
             fail(f"Export {fmt} to {path} failed: {type(e).__name__}: {e}",
                  traceback.format_exc())
             return
-        import os
-        exported.append({"format": fmt, "path": path, "bytes": os.path.getsize(path)})
+        # Read the completed artifact once and derive both identity fields from
+        # those exact bytes.  The path remains a location; sha256 is the
+        # immutable identity that downstream tools can verify after copying.
+        with open(path, "rb") as artifact:
+            artifact_bytes = artifact.read()
+        exported.append(
+            {
+                "format": fmt,
+                "path": path,
+                "bytes": len(artifact_bytes),
+                "sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+            }
+        )
 
     json.dump({"ok": True, "metrics": metrics, "exports": exported}, sys.stdout)
 

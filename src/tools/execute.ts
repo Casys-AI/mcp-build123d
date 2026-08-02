@@ -59,7 +59,7 @@ const EXTENSIONS: Record<ExportSpec["format"], string> = {
   gltf: "glb",
 };
 
-const GLTF_ARTIFACT_TOOL = "build123d_export_read";
+export const GLTF_ARTIFACT_TOOL = "build123d_export_read";
 const DEFAULT_GLTF_MAX_BYTES = 8 * 1024 * 1024;
 const HARD_GLTF_MAX_BYTES = 24 * 1024 * 1024;
 
@@ -235,11 +235,16 @@ const METRICS_SCHEMA = {
 const FILE_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["format", "path", "bytes"],
+  required: ["format", "path", "bytes", "sha256"],
   properties: {
     format: { type: "string", enum: ["step", "stl", "gltf"] },
     path: { type: "string" },
     bytes: { type: "integer", minimum: 0 },
+    sha256: {
+      type: "string",
+      pattern: "^[a-f0-9]{64}$",
+      description: "SHA-256 of the exact exported file bytes",
+    },
     viewer: {
       type: "object",
       additionalProperties: false,
@@ -451,7 +456,6 @@ export const executeTools: CadTool[] = [
     _meta: {
       ui: {
         resourceUri: ARTIFACT_HELPER_VIEWER_URI,
-        visibility: ["app"],
       },
     },
     inputSchema: {

@@ -39,11 +39,17 @@ Deno.test("results viewer parses exactly the v1 execution and export envelopes",
     schemaVersion: "1.0",
     kind: "export",
     metrics: METRICS,
-    files: [{ format: "step", path: "/exports/bracket.step", bytes: 4256 }],
+    files: [{
+      format: "step",
+      path: "/exports/bracket.step",
+      bytes: 4256,
+      sha256: "a".repeat(64),
+    }],
   });
   assertEquals(exported.ok, true);
   if (!exported.ok) return;
   assertEquals(exported.value.files[0].format, "step");
+  assertEquals(exported.value.files[0].sha256, "a".repeat(64));
 
   const gltf = parseGeometryResult({
     schemaVersion: "1.0",
@@ -53,6 +59,7 @@ Deno.test("results viewer parses exactly the v1 execution and export envelopes",
       format: "gltf",
       path: "/exports/assembly.glb",
       bytes: 12,
+      sha256: "b".repeat(64),
       viewer: { toolName: "build123d_export_read", name: "assembly.glb" },
     }],
   });
@@ -175,6 +182,17 @@ Deno.test("results viewer rejects invalid v1 envelopes before rendering", () => 
   });
   assertEquals(emptyExport.ok, false);
   if (!emptyExport.ok) assertStringIncludes(emptyExport.error, "at least one");
+
+  const exportWithoutDigest = parseGeometryResult({
+    schemaVersion: "1.0",
+    kind: "export",
+    metrics: METRICS,
+    files: [{ format: "step", path: "missing.step", bytes: 1 }],
+  });
+  assertEquals(exportWithoutDigest.ok, false);
+  if (!exportWithoutDigest.ok) {
+    assertStringIncludes(exportWithoutDigest.error, "sha256");
+  }
 });
 
 Deno.test("results viewer accepts signed coordinates around the origin", () => {
@@ -206,6 +224,7 @@ Deno.test("results viewer lifecycle errors escape markup", () => {
       format: "gltf",
       path: '<img src=x onerror="alert(1)">',
       bytes: 12,
+      sha256: "c".repeat(64),
     }],
   });
   assertEquals(parsed.ok, true);
@@ -241,6 +260,7 @@ Deno.test("results viewer derives component data from the real geometry result",
       format: "gltf",
       path: "/exports/assembly.glb",
       bytes: 4096,
+      sha256: "d".repeat(64),
       viewer: { toolName: "build123d_export_read", name: "assembly.glb" },
     }],
   });

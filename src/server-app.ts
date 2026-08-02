@@ -2,6 +2,7 @@
 
 import { McpApp } from "@casys/mcp-server";
 import { CadToolsClient } from "./client.ts";
+import { GLTF_ARTIFACT_TOOL } from "./tools/execute.ts";
 import { registerBuild123dViewers, type ViewerFilesystem } from "./viewers.ts";
 
 export interface CreateCadMcpAppOptions {
@@ -25,7 +26,7 @@ export function createCadMcpApp(
   );
   const app = new McpApp({
     name: "mcp-build123d",
-    version: "0.4.0",
+    version: "0.4.1",
     transport: "stateless",
     maxConcurrent: 4,
     backpressureStrategy: "queue",
@@ -33,7 +34,16 @@ export function createCadMcpApp(
     logger: (msg) => console.error(`[mcp-build123d] ${msg}`),
   });
 
-  app.registerTools(toolsClient.toMCPFormat(), toolsClient.buildHandlersMap());
+  const handlers = toolsClient.buildHandlersMap();
+  for (const tool of toolsClient.toMCPFormat()) {
+    const handler = handlers.get(tool.name);
+    if (!handler) throw new Error(`Missing handler for tool '${tool.name}'`);
+    if (tool.name === GLTF_ARTIFACT_TOOL) {
+      app.registerAppOnlyTool(tool, handler);
+    } else {
+      app.registerTool(tool, handler);
+    }
+  }
   const viewers = registerBuild123dViewers(
     app,
     options.viewerFilesystem,

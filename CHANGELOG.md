@@ -2,7 +2,11 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
-## [Unreleased]
+## [0.4.1] - 2026-08-02
+
+- `build123d_export.files[]` now includes a lowercase SHA-256 digest computed
+  from the exact exported bytes, allowing downstream CAD-to-FEA provenance to
+  distinguish different content written to the same path.
 
 ## [0.4.0] - 2026-08-01
 

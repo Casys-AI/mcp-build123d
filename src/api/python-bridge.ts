@@ -41,6 +41,8 @@ export interface CadExportFile {
   format: ExportSpec["format"];
   path: string;
   bytes: number;
+  /** SHA-256 of the exact bytes written by this export. */
+  sha256: string;
 }
 
 export interface CadMetrics {

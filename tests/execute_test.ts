@@ -121,6 +121,7 @@ Deno.test("build123d_export - writes the requested formats and returns metrics",
       files: payload.files as Array<{
         path: string;
         bytes: number;
+        sha256: string;
         viewer?: { toolName: string; name: string };
       }>,
     };
@@ -139,6 +140,13 @@ Deno.test("build123d_export - writes the requested formats and returns metrics",
       const stat = await Deno.stat(file.path);
       assertEquals(stat.size > 0, true);
       assertEquals(stat.size, file.bytes);
+      const bytes = await Deno.readFile(file.path);
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      const expected = Array.from(
+        new Uint8Array(digest),
+        (byte) => byte.toString(16).padStart(2, "0"),
+      ).join("");
+      assertEquals(file.sha256, expected);
     }
     assertAlmostEquals(result.metrics.volume_mm3 as number, 1000, 1e-6);
   } finally {
@@ -350,7 +358,6 @@ Deno.test("executeTools - tool count, category, schema coherence", () => {
     if (tool.name === "build123d_export_read") {
       assertEquals(tool._meta?.ui, {
         resourceUri: "ui://mcp-build123d/artifact-helper-viewer",
-        visibility: ["app"],
       });
       assertEquals(
         (tool.outputSchema.properties as { kind: { const: string } }).kind

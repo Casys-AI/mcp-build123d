@@ -22,6 +22,8 @@ export interface ExportFile {
   format: "step" | "stl" | "gltf";
   path: string;
   bytes: number;
+  /** Lowercase SHA-256 of the exact exported bytes. */
+  sha256: string;
   viewer?: {
     toolName: "build123d_export_read";
     name: string;
@@ -171,6 +173,11 @@ function files(value: unknown): ExportFile[] | string {
     }
     const bytes = number(file.bytes, `files[${index}].bytes`, true);
     if (typeof bytes === "string") return bytes;
+    if (
+      typeof file.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(file.sha256)
+    ) {
+      return `files[${index}].sha256 must be a lowercase SHA-256 digest`;
+    }
     let viewer: ExportFile["viewer"];
     if (file.viewer !== undefined) {
       if (file.format !== "gltf") {
@@ -189,7 +196,13 @@ function files(value: unknown): ExportFile[] | string {
         name: source.name,
       };
     }
-    parsed.push({ format: file.format, path: file.path, bytes, viewer });
+    parsed.push({
+      format: file.format,
+      path: file.path,
+      bytes,
+      sha256: file.sha256,
+      viewer,
+    });
   }
   return parsed;
 }

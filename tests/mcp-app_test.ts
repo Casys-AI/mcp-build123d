@@ -50,11 +50,13 @@ Deno.test("geometry result keeps a concise fallback and no source or file conten
     format: "gltf",
     path: "/exports/assembly.glb",
     bytes: 2048,
+    sha256: "a".repeat(64),
   }]);
   assertEquals(exported.structuredContent.files, [{
     format: "gltf",
     path: "/exports/assembly.glb",
     bytes: 2048,
+    sha256: "a".repeat(64),
     viewer: {
       toolName: "build123d_export_read",
       name: "assembly.glb",
@@ -74,7 +76,6 @@ Deno.test("build123d MCP App tools publish the shared viewer and explicit output
     if (tool.name === "build123d_export_read") {
       assertEquals(tool._meta?.ui, {
         resourceUri: ARTIFACT_HELPER_VIEWER_URI,
-        visibility: ["app"],
       });
       assertEquals(
         (tool.outputSchema.properties as { kind: { const: string } }).kind
@@ -138,7 +139,6 @@ Deno.test("build123d tools/list uses the stateless 2026 wire contract", async ()
       if (tool.name === "build123d_export_read") {
         assertEquals((tool._meta as { ui: unknown }).ui, {
           resourceUri: ARTIFACT_HELPER_VIEWER_URI,
-          visibility: ["app"],
         });
         continue;
       }
@@ -202,7 +202,7 @@ Deno.test("build123d server/discover uses the 2026-07-28 stateless wire without 
     );
     assertEquals(body.result.serverInfo, {
       name: "mcp-build123d",
-      version: "0.4.0",
+      version: "0.4.1",
     });
   } finally {
     await http.shutdown();
@@ -222,7 +222,7 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
   try {
     const assembly = createCadMcpApp({
       viewerModuleUrl:
-        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.4.0/server.ts`,
+        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.4.1/server.ts`,
     });
     assertEquals(assembly.viewers, {
       registered: ["results-viewer", "artifact-helper-viewer"],
@@ -238,8 +238,8 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
       "published CAD result",
     );
     assertEquals(seen, [
-      "/@casys/mcp-build123d/0.4.0/src/ui/dist/results-viewer/index.html",
-      "/@casys/mcp-build123d/0.4.0/src/ui/dist/artifact-helper-viewer/index.html",
+      "/@casys/mcp-build123d/0.4.1/src/ui/dist/results-viewer/index.html",
+      "/@casys/mcp-build123d/0.4.1/src/ui/dist/artifact-helper-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();
