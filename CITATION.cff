@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "mcp-build123d: MCP server for build123d — parametric CAD as code (Python/OCCT) driven by AI agents"
+authors:
+  - family-names: Pesle
+    given-names: Erwan Lee
+year: 2026
+license: MIT
+repository-code: https://github.com/Casys-AI/mcp-build123d
+type: software
