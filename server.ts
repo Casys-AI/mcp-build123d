@@ -30,7 +30,7 @@ async function main() {
   const hostnameArg = args.find((arg) => arg.startsWith("--hostname="));
   const hostname = hostnameArg ? hostnameArg.split("=")[1] : "127.0.0.1"; // loopback by default — these tools execute code; exposing them is an explicit choice
 
-  const { app: server, toolsClient } = createCadMcpApp({ categories });
+  const { app: server } = createCadMcpApp({ categories });
 
   await server.startHttp({
     port: httpPort,
@@ -42,9 +42,7 @@ async function main() {
       );
     },
   });
-  console.error(
-    `[mcp-build123d] Server ready (${toolsClient.count} tools) - stateless HTTP`,
-  );
+  console.error("[mcp-build123d] Server ready - stateless HTTP");
 
   Deno.addSignalListener("SIGINT", () => {
     console.error("[mcp-build123d] Shutting down...");
