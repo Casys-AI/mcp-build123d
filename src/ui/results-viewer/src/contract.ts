@@ -45,6 +45,22 @@ export type DecodeGltfArtifact =
   | { ok: true; value: Uint8Array }
   | { ok: false; error: string };
 
+export interface GltfViewerReadArguments {
+  name: string;
+  expected_sha256: string;
+}
+
+/** Bind the app-only GLB read to the exact exported `files[].sha256`. */
+export function gltfViewerReadArguments(
+  file: ExportFile,
+): GltfViewerReadArguments | undefined {
+  if (!file.viewer) return undefined;
+  return {
+    name: file.viewer.name,
+    expected_sha256: file.sha256,
+  };
+}
+
 const MAX_GLTF_ARTIFACT_BYTES = 24 * 1024 * 1024;
 
 function uint32le(bytes: Uint8Array, offset: number): number {

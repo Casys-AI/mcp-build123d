@@ -18,6 +18,51 @@ function startOnFreePort() {
   return port;
 }
 
+async function mcpRpc(
+  port: number,
+  method: string,
+  params: Record<string, unknown> = {},
+) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "MCP-Protocol-Version": PROTOCOL_VERSION,
+    "Mcp-Method": method,
+  };
+  if (method === "tools/call" && typeof params.name === "string") {
+    headers["Mcp-Name"] = params.name;
+  }
+  const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params: {
+        _meta: {
+          [PROTOCOL_KEY]: PROTOCOL_VERSION,
+          [CAPABILITIES_KEY]: {},
+        },
+        ...params,
+      },
+    }),
+  });
+  return {
+    status: response.status,
+    body: await response.json() as Record<string, unknown>,
+  };
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", copy);
+  return Array.from(
+    new Uint8Array(digest),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
 const METRICS = {
   volume_mm3: 1000,
   area_mm2: 700,
@@ -94,6 +139,23 @@ Deno.test("build123d MCP App tools publish the shared viewer and explicit output
         metrics: { properties: Record<string, { minimum: number }> };
       })
         .metrics.properties.volume_mm3.minimum,
+      0,
+    );
+    assertEquals(
+      (tool.outputSchema.properties as {
+        metrics: {
+          properties: {
+            density_kg_m3: { exclusiveMinimum: number };
+            mass_kg: { minimum: number };
+          };
+        };
+      }).metrics.properties.density_kg_m3.exclusiveMinimum,
+      0,
+    );
+    assertEquals(
+      (tool.outputSchema.properties as {
+        metrics: { properties: { mass_kg: { minimum: number } } };
+      }).metrics.properties.mass_kg.minimum,
       0,
     );
   }
@@ -202,7 +264,7 @@ Deno.test("build123d server/discover uses the 2026-07-28 stateless wire without 
     );
     assertEquals(body.result.serverInfo, {
       name: "mcp-build123d",
-      version: "0.4.1",
+      version: "0.4.2",
     });
   } finally {
     await http.shutdown();
@@ -222,7 +284,7 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
   try {
     const assembly = createCadMcpApp({
       viewerModuleUrl:
-        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.4.1/server.ts`,
+        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.4.2/server.ts`,
     });
     assertEquals(assembly.viewers, {
       registered: ["results-viewer", "artifact-helper-viewer"],
@@ -238,8 +300,8 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
       "published CAD result",
     );
     assertEquals(seen, [
-      "/@casys/mcp-build123d/0.4.1/src/ui/dist/results-viewer/index.html",
-      "/@casys/mcp-build123d/0.4.1/src/ui/dist/artifact-helper-viewer/index.html",
+      "/@casys/mcp-build123d/0.4.2/src/ui/dist/results-viewer/index.html",
+      "/@casys/mcp-build123d/0.4.2/src/ui/dist/artifact-helper-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();
@@ -292,6 +354,8 @@ Deno.test("build123d ships the generated standalone results viewer", async () =>
   assertStringIncludes(html, "build123d.geometry-metrics");
   assertStringIncludes(html, "build123d.geometry-canvas");
   assertStringIncludes(html, "build123d.export-artifacts");
+  assertStringIncludes(html, "expected_sha256");
+  assertEquals(helperHtml.includes("expected_sha256"), false);
   assertEquals(html.includes("io.casys.mcp.composable-view/v1"), false);
   assertEquals(html.includes("build123d-glance"), false);
   assertEquals(html.includes("__BUILD123D_VIEWER_BUNDLE__"), false);
@@ -309,4 +373,127 @@ Deno.test("build123d result viewer is skipped before its bundle is built", () =>
     skipped: ["results-viewer", "artifact-helper-viewer"],
   });
   assertEquals(assembly.app.hasResource(RESULTS_VIEWER_URI), false);
+});
+
+Deno.test("build123d input schemas reject extra properties and invalid bounds on the wire", async () => {
+  const assembly = createCadMcpApp({
+    viewerModuleUrl: "file:///project/server.ts",
+    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
+  });
+  const port = startOnFreePort();
+  const http = await assembly.app.startHttp({ port, onListen: () => {} });
+  try {
+    const extra = await mcpRpc(port, "tools/call", {
+      name: "build123d_execute",
+      arguments: { script: "result = 1", unexpected: true },
+    });
+    assertEquals(extra.body.result, undefined);
+    assertStringIncludes(JSON.stringify(extra.body.error), "unexpected");
+
+    const emptyFormats = await mcpRpc(port, "tools/call", {
+      name: "build123d_export",
+      arguments: { script: "result = 1", formats: [], name: "bracket" },
+    });
+    assertEquals(emptyFormats.body.result, undefined);
+    assertStringIncludes(JSON.stringify(emptyFormats.body.error), "formats");
+
+    const duplicateFormats = await mcpRpc(port, "tools/call", {
+      name: "build123d_export",
+      arguments: {
+        script: "result = 1",
+        formats: ["step", "step"],
+        name: "bracket",
+      },
+    });
+    assertEquals(duplicateFormats.body.result, undefined);
+    assertStringIncludes(
+      JSON.stringify(duplicateFormats.body.error),
+      "duplicate",
+    );
+
+    const zeroDensity = await mcpRpc(port, "tools/call", {
+      name: "build123d_execute",
+      arguments: { script: "result = 1", density_kg_m3: 0 },
+    });
+    assertEquals(zeroDensity.body.result, undefined);
+    assertStringIncludes(JSON.stringify(zeroDensity.body.error), "must be > 0");
+
+    const fractionalTimeout = await mcpRpc(port, "tools/call", {
+      name: "build123d_execute",
+      arguments: { script: "result = 1", timeout_ms: 1.5 },
+    });
+    assertEquals(fractionalTimeout.body.result, undefined);
+    assertStringIncludes(
+      JSON.stringify(fractionalTimeout.body.error),
+      "integer",
+    );
+  } finally {
+    await http.shutdown();
+  }
+});
+
+Deno.test("build123d_export_read tools/call requires expected_sha256 on the app-only wire", async () => {
+  const dir = await Deno.makeTempDir({ prefix: "cad-wire-glb-" });
+  Deno.env.set("BUILD123D_EXPORT_DIR", dir);
+  const assembly = createCadMcpApp({
+    viewerModuleUrl: "file:///project/server.ts",
+    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
+  });
+  const port = startOnFreePort();
+  const http = await assembly.app.startHttp({ port, onListen: () => {} });
+  try {
+    const bytes = new Uint8Array([
+      0x67,
+      0x6c,
+      0x54,
+      0x46,
+      2,
+      0,
+      0,
+      0,
+      12,
+      0,
+      0,
+      0,
+    ]);
+    await Deno.writeFile(`${dir}/assembly.glb`, bytes);
+    const digest = await sha256Hex(bytes);
+
+    const listed = await mcpRpc(port, "tools/list");
+    const tools = (listed.body.result as { tools: Array<{ name: string }> })
+      .tools;
+    assertEquals(
+      tools.map((tool) => tool.name).includes("build123d_export_read"),
+      false,
+    );
+
+    const missing = await mcpRpc(port, "tools/call", {
+      name: "build123d_export_read",
+      arguments: { name: "assembly.glb" },
+    });
+    assertEquals(missing.body.result, undefined);
+    assertStringIncludes(JSON.stringify(missing.body.error), "expected_sha256");
+
+    const accepted = await mcpRpc(port, "tools/call", {
+      name: "build123d_export_read",
+      arguments: {
+        name: "assembly.glb",
+        expected_sha256: digest,
+      },
+    });
+    const acceptedResult = accepted.body.result as {
+      structuredContent: {
+        name: string;
+        kind: string;
+        bytes: number;
+      };
+    };
+    assertEquals(acceptedResult.structuredContent.name, "assembly.glb");
+    assertEquals(acceptedResult.structuredContent.kind, "gltf-binary");
+    assertEquals(acceptedResult.structuredContent.bytes, bytes.length);
+  } finally {
+    await http.shutdown();
+    Deno.env.delete("BUILD123D_EXPORT_DIR");
+    await Deno.remove(dir, { recursive: true });
+  }
 });

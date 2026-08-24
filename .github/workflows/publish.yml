@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build123d (cad tools backend)
-        run: pip install build123d
+        run: pip install build123d==0.11.1
 
       - name: Type check
         run: deno check mod.ts server.ts

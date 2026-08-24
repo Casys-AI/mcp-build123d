@@ -25,6 +25,12 @@ import json
 import sys
 import traceback
 
+# Reproducibility marker written into STEP FILE_NAME. This is not the
+# execution or export time; it is passed to build123d's native STEP timestamp
+# parameter so the same geometry yields identical STEP bytes under the pinned
+# build123d 0.11.1 / OCCT environment.
+STEP_FILE_NAME_TIMESTAMP_SENTINEL = "1970-01-01T00:00:00Z"
+
 
 def fail(error: str, tb: str | None = None) -> None:
     json.dump({"ok": False, "error": error, "traceback": tb}, sys.stdout)
@@ -118,7 +124,9 @@ def main() -> None:
         fmt, path = spec.get("format"), spec.get("path")
         try:
             if fmt == "step":
-                b3d.export_step(result, path)
+                b3d.export_step(
+                    result, path, timestamp=STEP_FILE_NAME_TIMESTAMP_SENTINEL
+                )
             elif fmt == "stl":
                 b3d.export_stl(result, path)
             elif fmt == "gltf":

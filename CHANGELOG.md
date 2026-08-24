@@ -2,6 +2,25 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [0.4.2] - Unreleased
+
+This checkout prepares 0.4.2; it is not published.
+
+- **Native deterministic STEP timestamps.** `build123d_export` passes the UTC
+  sentinel `1970-01-01T00:00:00Z` to build123d 0.11.1's native
+  `export_step(..., timestamp=)` parameter. That sentinel is a reproducibility
+  marker, not the execution or export time. Byte-for-byte STEP identity remains
+  scoped to the pinned build123d 0.11.1 / OCCT environment.
+- **Digest-bound GLB viewer reads.** `build123d_export_read` requires
+  `expected_sha256` matching the export's `files[].sha256`; the results viewer
+  passes that digest. A later export at the same basename with different bytes
+  is rejected.
+- **Hardened tool input schemas.** `additionalProperties: false` on
+  `build123d_execute` and `build123d_export`; `formats` is a unique 1–3 list;
+  `density_kg_m3` is strictly positive; `timeout_ms` is an integer ≥ 1; export
+  `name` is capped at 251 characters so `"<name>.glb"` stays within 255.
+- **CI** installs `build123d==0.11.1`.
+
 ## [0.4.1] - 2026-08-02
 
 - `build123d_export.files[]` now includes a lowercase SHA-256 digest computed

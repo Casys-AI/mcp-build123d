@@ -1,69 +1,202 @@
 # @casys/mcp-build123d
 
-MCP server for **parametric CAD as code** —
-[build123d](https://github.com/gumyr/build123d) (Python, Open CASCADE kernel)
-driven by AI agents. **2 agent tools** execute a script, read exact geometry
-metrics and export STEP / STL / GLTF. One app-only helper hydrates the bundled
-3D viewer without exposing another filesystem path.
+[![JSR](https://jsr.io/badges/@casys/mcp-build123d)](https://jsr.io/@casys/mcp-build123d)
+[![CI](https://github.com/Casys-AI/mcp-build123d/actions/workflows/publish.yml/badge.svg)](https://github.com/Casys-AI/mcp-build123d/actions/workflows/publish.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+Turn a [build123d](https://github.com/gumyr/build123d) Python model into
+measured CAD and verifiable export artifacts through MCP. Agent-facing
+operations execute a parametric model, report OCCT geometry metrics, and export
+STEP, STL, or GLB. The bundled MCP App adds interactive 3D inspection without
+putting binary model data in the agent-facing result.
 
 ```
 agent writes build123d script
         │
-   build123d_execute ──► volume, mass, center of gravity, bbox   (OCCT, analytical)
+   build123d_execute ──► volume, area, centroid, bbox, topology
         │
    build123d_export  ──► part.step   → FEA meshing (Gmsh, CalculiX), other CAD
                    part.stl    → 3D printing
                    part.glb    → 3D viewers
 ```
 
+At a glance:
+
+- Parametric solids, sketches, extrusions, revolves, sweeps, lofts, booleans,
+  holes, fillets, chamfers, patterns, and compounds can use the normal build123d
+  API installed with the selected Python interpreter.
+- STEP preserves the BREP, while STL and GLB are tessellated delivery formats.
+- Every exported file includes its exact byte count and SHA-256 digest.
+- Mass is reported only from an explicit uniform density. No material or density
+  is guessed.
+
 ## Why CAD-as-code for agents
 
 An agent doesn't click — it writes. With a GUI CAD's API, building geometry
 means one HTTP call per feature against a stateful document. With build123d,
 **the script is the artifact**: generated in one shot, versionable, diffable,
-reproducible by anyone with Python, and carrying its own traceability (the SysML
-element or requirement that motivated a dimension can live in the code, as a
-comment or a variable name).
+replayable in a pinned Python/build123d environment, and carrying its own
+traceability (the SysML element or requirement that motivated a dimension can
+live in the code, as a comment or a variable name).
 
 The metrics are not estimates. Volume, surface area, center of mass and bounding
-box come analytically from the BREP kernel — the same numbers a commercial CAD
-reports.
+box come analytically from the BREP kernel rather than from the STL or GLB
+tessellation.
 
-## Security model — read this
+## Quick start
+
+### Run a source checkout
+
+Requirements are Deno 2.x and Python 3.10+ with build123d. A virtual environment
+keeps the OCCT dependency isolated from the system Python:
+
+```bash
+git clone https://github.com/Casys-AI/mcp-build123d.git
+cd mcp-build123d
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install build123d==0.11.1
+BUILD123D_PYTHON_BIN="$PWD/.venv/bin/python" deno task serve
+```
+
+The server binds to loopback and exposes Streamable HTTP at
+`http://127.0.0.1:3014/mcp`. Check the process separately with:
+
+```bash
+curl http://127.0.0.1:3014/health
+```
+
+### Run the published package
+
+This checkout prepares unpublished `0.4.2`. The currently published JSR package
+remains `0.4.1` and can be started directly; Python and build123d are still host
+dependencies:
+
+```bash
+BUILD123D_PYTHON_BIN="$PWD/.venv/bin/python" \
+  deno run -A jsr:@casys/mcp-build123d@0.4.1/server --port=3014
+```
+
+`-A` is intentional here: the public tools run arbitrary Python and write
+exports. Use the source task or a container when you want to replace it with a
+deployment-specific Deno permission set.
+
+Point a Streamable HTTP-capable MCP client at the endpoint. The exact config
+file location depends on the host; the connection entry is typically:
+
+```json
+{
+  "mcpServers": {
+    "build123d": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:3014/mcp"
+    }
+  }
+}
+```
+
+This release is HTTP-only. It does not implement stdio, so a client
+configuration with `command` and `args` will not work. HTTP binds to `127.0.0.1`
+by default; `--hostname=0.0.0.0` is an explicit network exposure.
+
+### Run the published engineering toolchain image
+
+This repository does not publish a dedicated `mcp-build123d` image. Casys does
+publish release `0.4.1` in the broader
+[`engineering-toolchain`](https://github.com/Casys-AI/engineering-toolchain)
+image, with Python, build123d 0.11.1, and OCCT already installed. Start its
+`build123d` entrypoint directly while keeping exports on the host:
+
+```bash
+mkdir -p "$PWD/cad-exports"
+docker run --rm \
+  --publish 127.0.0.1:3014:3014 \
+  --volume "$PWD/cad-exports:/exports" \
+  ghcr.io/casys-ai/engineering-toolchain:0.4.1 \
+  build123d --port=3014 --hostname=0.0.0.0
+```
+
+### Build a checkout locally
+
+For a dedicated local image built from this checkout, save the following as
+`Dockerfile.local`. It keeps Python, OCCT, Deno, and exports together:
+
+```dockerfile
+FROM denoland/deno:debian-2.9.2
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/build123d \
+    && /opt/build123d/bin/pip install --no-cache-dir build123d==0.11.1
+WORKDIR /app
+COPY . .
+RUN deno cache --frozen server.ts \
+    && mkdir -p /exports \
+    && chown -R deno:deno /app /exports
+ENV BUILD123D_PYTHON_BIN=/opt/build123d/bin/python
+ENV BUILD123D_EXPORT_DIR=/exports
+USER deno
+EXPOSE 3014
+CMD ["deno", "run", "-A", "server.ts", "--hostname=0.0.0.0", "--port=3014"]
+```
+
+```bash
+docker build -f Dockerfile.local -t mcp-build123d:local .
+mkdir -p cad-exports
+docker run --rm \
+  --publish 127.0.0.1:3014:3014 \
+  --volume "$PWD/cad-exports:/exports" \
+  mcp-build123d:local
+```
+
+The container is packaging, not a sandbox: the submitted Python still has the
+container user's authority and can access anything mounted into it.
+
+## Security and trust boundary
 
 `build123d_execute` and `build123d_export` run **arbitrary Python** on the
 machine hosting this server. That is the point (CAD-as-code), not an accident.
 Consequences:
 
 - Only expose this server to callers you trust with shell-equivalent access.
-- Exports are confined to `BUILD123D_EXPORT_DIR`: file names are reduced to a
-  safe basename (directory components stripped, extension imposed by the
-  format), so a script cannot choose where files land — but the Python it
-  contains can do anything Python can.
+- `build123d_export`'s managed outputs are confined to `BUILD123D_EXPORT_DIR`:
+  file names are reduced to a safe basename (directory components stripped,
+  extension imposed by the format). The submitted Python is not confined by that
+  output-path rule and can do anything Python can.
+- Loopback binding, safe export names, timeouts, and the bounded GLB reader are
+  useful controls; none of them isolates the Python process. Put untrusted code
+  behind a real sandbox with no secrets, network, or sensitive mounts.
+- HTTP authentication is not enabled by this bootstrap. Keep it on loopback or
+  add an authenticated deployment boundary before exposing it to a network.
 
-## Requirements
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-- **Python 3.10+** with **build123d**: `pip install build123d` (pulls the
-  OCP/OCCT wheel, ~150 MB)
-- Deno 2.x to run the server
+The server itself needs no account or API key. A submitted Python script still
+inherits the host or container's filesystem, process, and network access.
 
-No account, no API key, no network access at runtime.
+### Evidence versus canonical product geometry
 
-## Quick Start
+This standalone server returns real OCCT measurements and exact export-byte
+digests. That proves what this invocation computed and wrote; it does not prove
+that the script was reviewed, admitted, requirement-compliant, or canonical for
+a product Digital Thread.
 
-### Stateless HTTP
+In `casys-digital-thread`, the canonical STEP route is the governed technical
+source capture and compilation review followed by `compile.seal-admission@2`,
+`project_admitted_geometry_export`, and `design.write-geometry@1`. The separate
+`design.execute-build123d@1` isolated execution and
+`design.seal-isolated-geometry@1` publication path is documentary, not the
+canonical STEP authority. Keep those product-level authorities distinct from a
+direct call to this standalone server.
 
-```bash
-deno task serve      # port 3014
-```
+## Tools and result viewer
 
-## Tools (2 + 1 app-only helper) and result viewer
-
-Both public tools expose the same optional MCP App resource,
-`ui://mcp-build123d/results-viewer`. When its HTML bundle is present at
-`src/ui/dist/results-viewer/index.html`, compatible hosts can render the exact
-geometry result. Until then the server deliberately skips the resource and keeps
-the concise text response for every MCP client.
+`build123d_execute` and `build123d_export` expose the same optional MCP App
+resource, `ui://mcp-build123d/results-viewer`. When its HTML bundle is present
+at `src/ui/dist/results-viewer/index.html`, compatible hosts can render the
+exact geometry result. Until then the server deliberately skips the resource and
+keeps the concise text response for every MCP client.
 
 The structured result contract is versioned and never carries the submitted
 script or file contents:
@@ -72,19 +205,22 @@ script or file contents:
 {
   "schemaVersion": "1.0",
   "kind": "execution",
-  "metrics": { "volume_mm3": 11717.2, "area_mm2": 6303.4 },
+  "metrics": { "volume_mm3": 11717.2567, "area_mm2": 5875.3982 },
   "files": []
 }
 ```
 
 `kind: "export"` uses the same metrics and reports each generated file's format,
-path and byte size. A GLB also carries a bounded viewer reference:
+path, byte size and SHA-256. A GLB also carries a bounded viewer reference; the
+viewer must pass that file's `sha256` as `expected_sha256` when it calls the
+app-only reader:
 
 ```json
 {
   "format": "gltf",
   "path": "/exports/assembly.glb",
   "bytes": 204800,
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "viewer": {
     "toolName": "build123d_export_read",
     "name": "assembly.glb"
@@ -94,16 +230,19 @@ path and byte size. A GLB also carries a bounded viewer reference:
 
 The interactive industrial CAD view supports orbit, pan, zoom, fit, reset and
 wireframe inspection. `build123d_export_read` is visible only to MCP Apps. It
-accepts a basename rather than a path, resolves the real file under
-`BUILD123D_EXPORT_DIR`, rejects symlink escapes, validates the GLB header and
-returns a versioned `model/gltf-binary` base64 envelope.
+accepts a basename and the exact `files[].sha256` digest rather than a path,
+resolves the real file under `BUILD123D_EXPORT_DIR`, rejects symlink escapes and
+digest mismatches, validates the GLB header and returns a versioned
+`model/gltf-binary` base64 envelope. The export path is mutable: a later export
+with the same basename can replace the file, and a read using a stale digest is
+rejected.
 
 ### Compose components
 
 The same standalone viewer advertises a catalog of small, independently
 mountable components during `ui/initialize`. An MCP Compose dashboard chooses a
 declarative surface (component subset, order, grid and gap); without a requested
-surface, standalone mode mounts the default stack containing all four.
+surface, standalone mode mounts the default component stack.
 
 Every component is a Preact component built from the shared `@casys/mcp-view`
 presentation primitives (`Card`, `Badge`, `MetricGrid`, `KeyValueList`,
@@ -150,6 +289,20 @@ no module path or runtime network dependency. The viewer accepts only the
 structured result envelopes documented above; it never runs a script and can
 read only the GLB basename explicitly returned by `build123d_export`.
 
+### Script and geometry contract
+
+The server does not maintain a second recipe language or a feature allowlist.
+The selected Python environment determines which build123d APIs are available.
+The stable server convention is smaller: the script must leave its final `Part`,
+`Solid`, `Compound`, or `BuildPart` builder in a top-level variable named
+`result`.
+
+Build123d's default length convention is millimetres, which is why the public
+metric fields are explicitly named `*_mm`, `*_mm2`, and `*_mm3`. A compound is
+measured as one aggregate result, with total topology and one BREP centroid. The
+server does not currently return an inertia tensor, per-solid mass properties,
+material identity, tolerances, or manufacturing feasibility.
+
 ### `build123d_execute`
 
 Runs a build123d script, returns exact metrics. The script must assign its final
@@ -169,23 +322,38 @@ with BuildPart() as bracket:
 result = bracket
 ```
 
-Response:
+Structured response:
 
 ```json
 {
-  "volume_mm3": 11717.2,
-  "area_mm2": 6303.4,
-  "center_of_mass_mm": [-0.4, 0.0, 0.0],
-  "bounding_box_mm": { "min": [...], "max": [...], "size": [60, 40, 5] },
-  "solids": 1, "faces": 8, "edges": 18,
-  "density_kg_m3": 2700,
-  "mass_kg": 0.0316
+  "schemaVersion": "1.0",
+  "kind": "execution",
+  "metrics": {
+    "volume_mm3": 11717.2567,
+    "area_mm2": 5875.3982,
+    "center_of_mass_mm": [-0.362, 0, 0],
+    "bounding_box_mm": {
+      "min": [-30, -20, -2.5],
+      "max": [30, 20, 2.5],
+      "size": [60, 40, 5]
+    },
+    "solids": 1,
+    "faces": 8,
+    "edges": 18,
+    "density_kg_m3": 2700,
+    "mass_kg": 0.0316366
+  },
+  "files": []
 }
 ```
 
+Values are rounded from build123d 0.11.1 / OCCT for this example; the installed
+Python environment is part of reproducibility.
+
 **Mass requires an explicit `density_kg_m3`** (2700 for aluminium 6061, 7850 for
 steel…). Without it, `mass_kg` is absent — it is never guessed from a material
-name.
+name. One density applies uniformly to the complete result; heterogeneous
+assemblies need to be evaluated per material outside this contract.
 
 ### `build123d_export`
 
@@ -198,6 +366,41 @@ Same execution, plus files. `formats`: `step` (exact BREP), `stl` (mesh), `gltf`
 (binary `.glb`). Files land under `BUILD123D_EXPORT_DIR` (default
 `./cad-exports`); the response returns paths and sizes, along with the same
 metrics.
+
+Example tool input using the script above:
+
+```json
+{
+  "script": "from build123d import *\nwith BuildPart() as bracket:\n    Box(60, 40, 5)\nresult = bracket\n",
+  "formats": ["step", "stl", "gltf"],
+  "name": "bracket-r1",
+  "density_kg_m3": 2700,
+  "timeout_ms": 60000
+}
+```
+
+### Content and digest semantics
+
+- Each call runs the script once. `build123d_export` derives all requested
+  formats and the reported metrics from that one in-memory result.
+- The server does not persist a run ledger or return the submitted script in
+  `structuredContent`. Version the source in your own repository or evidence
+  store when the script itself matters.
+- An export path is a mutable location. Reusing the same `name` can replace its
+  contents; `files[].sha256`, not the path, identifies the exact bytes returned
+  by that invocation. The app-only GLB reader requires that digest as
+  `expected_sha256` and hashes the bytes actually read before encoding them.
+- `build123d_export` passes the UTC sentinel `1970-01-01T00:00:00Z` to
+  build123d's native STEP `timestamp` parameter. That sentinel is a
+  reproducibility marker, not the execution or export time. Byte-for-byte STEP
+  identity is scoped to the pinned build123d 0.11.1 / OCCT environment; other
+  versions may still change export bytes.
+- Digest equality proves byte equality, not geometric equivalence. Export bytes
+  can change across build123d, OCCT, or exporter versions even when a shape is
+  visually equivalent.
+- STEP and STL are files only in this release. GLB has a bounded, digest-bound
+  app-only reader for the viewer, but there is no general artifact resource or
+  download API.
 
 ## Environment Variables
 
@@ -226,20 +429,20 @@ tests/                  # contract, wire, viewer and real build123d tests
 The bridge is a subprocess speaking JSON — the same architectural choice as
 `@casys/constraint-solver`'s z3 backend: identical behaviour under Deno and
 Node, no WASM, and the heavyweight dependency (Python + OCCT) stays on the
-machine where one pip command installs it.
+selected host or in its container.
 
 ## Composing the chain
 
-`build123d_execute`'s mass feeds `@casys/constraint-solver` (via
-`@casys/mcp-syson`'s `syson_constraint_evaluate`) to check a computed mass
-against a SysML mass budget — with units. `build123d_export`'s STEP file is the
-entry point for FEA meshing. Each link is a separate MCP server; the agent
-composes them.
+In a standalone workflow, `build123d_execute`'s mass feeds
+`@casys/constraint-solver` (via `@casys/mcp-syson`'s
+`syson_constraint_evaluate`) to check a computed mass against a SysML mass
+budget — with units. `build123d_export`'s STEP file is the entry point for FEA
+meshing. Each link is a separate MCP server; the agent composes them.
 
 ## Development
 
 ```bash
-deno task test     # 31 tests; needs Python 3.10+ with build123d
+deno task test     # needs Python 3.10+ with build123d
 deno check mod.ts server.ts
 ```
 

@@ -1,6 +1,7 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import {
   decodeGltfArtifact,
+  gltfViewerReadArguments,
   parseGeometryResult,
 } from "../src/ui/results-viewer/src/contract.ts";
 import { renderViewer } from "../src/ui/results-viewer/src/render.ts";
@@ -69,6 +70,12 @@ Deno.test("results viewer parses exactly the v1 execution and export envelopes",
     toolName: "build123d_export_read",
     name: "assembly.glb",
   });
+  assertEquals(gltf.value.files[0].sha256, "b".repeat(64));
+  assertEquals(gltfViewerReadArguments(gltf.value.files[0]), {
+    name: "assembly.glb",
+    expected_sha256: "b".repeat(64),
+  });
+  assertEquals(gltfViewerReadArguments(exported.value.files[0]), undefined);
 });
 
 Deno.test("results viewer publishes the small component catalog and standalone surface", () => {
@@ -167,7 +174,12 @@ Deno.test("results viewer rejects invalid v1 envelopes before rendering", () => 
     schemaVersion: "1.0",
     kind: "execution",
     metrics: METRICS,
-    files: [{ format: "stl", path: "unexpected.stl", bytes: 1 }],
+    files: [{
+      format: "stl",
+      path: "unexpected.stl",
+      bytes: 1,
+      sha256: "e".repeat(64),
+    }],
   });
   assertEquals(executionWithFile.ok, false);
   if (!executionWithFile.ok) {
@@ -329,4 +341,6 @@ Deno.test("results viewer keeps only CAD layout CSS beside shared Preact compone
   }
   assertEquals(styles.includes("data-casys-projection"), false);
   assertEquals(styles.includes("build123d-glance"), false);
+  assertStringIncludes(components, "gltfViewerReadArguments");
+  assertStringIncludes(components, "gltf?.sha256");
 });

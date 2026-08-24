@@ -5,8 +5,9 @@
  * `build123d_export` additionally writes STEP / STL / GLTF files — STEP is the
  * entry point of any FEA chain (Gmsh, CalculiX), GLB feeds 3D viewers.
  *
- * Both tools execute arbitrary Python by design: CAD-as-code means the
- * script IS the artifact. Do not expose this server to untrusted callers.
+ * `build123d_execute` and `build123d_export` execute arbitrary Python by design:
+ * CAD-as-code means the script IS the artifact. Do not expose this server to
+ * untrusted callers.
  *
  * @module lib/cad/tools/execute
  */
@@ -62,6 +63,8 @@ const EXTENSIONS: Record<ExportSpec["format"], string> = {
 export const GLTF_ARTIFACT_TOOL = "build123d_export_read";
 const DEFAULT_GLTF_MAX_BYTES = 8 * 1024 * 1024;
 const HARD_GLTF_MAX_BYTES = 24 * 1024 * 1024;
+const SHA256_HEX_PATTERN = "^[a-f0-9]{64}$";
+const SHA256_HEX = new RegExp(SHA256_HEX_PATTERN);
 
 export interface GltfViewerReference {
   toolName: typeof GLTF_ARTIFACT_TOOL;
@@ -109,11 +112,34 @@ function uint32le(bytes: Uint8Array, offset: number): number {
   ).getUint32(0, true);
 }
 
+function isSha256Hex(value: unknown): value is string {
+  return typeof value === "string" && SHA256_HEX.test(value);
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", copy);
+  return Array.from(
+    new Uint8Array(digest),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
 /**
  * Read one viewer artifact without accepting a path. Real-path containment also
  * prevents a symlink placed in the export directory from escaping its root.
+ * `expectedSha256` is the exact `files[].sha256` of the export being viewed.
  */
-export async function readGltfArtifact(name: string): Promise<Uint8Array> {
+export async function readGltfArtifact(
+  name: string,
+  expectedSha256: string,
+): Promise<Uint8Array> {
+  if (!isSha256Hex(expectedSha256)) {
+    throw new Error(
+      "[build123d_export_read] expected_sha256 must be a lowercase 64-hex SHA-256 digest.",
+    );
+  }
   if (!isSafeGltfName(name)) {
     throw new Error(
       `[build123d_export_read] '${name}' is not a safe .glb basename.`,
@@ -175,6 +201,12 @@ export async function readGltfArtifact(name: string): Promise<Uint8Array> {
       `[build123d_export_read] '${name}' has a declared GLB length that does not match its file size.`,
     );
   }
+  const actual = await sha256Hex(bytes);
+  if (actual !== expectedSha256) {
+    throw new Error(
+      `[build123d_export_read] GLB artifact '${name}' does not match expected_sha256.`,
+    );
+  }
   return bytes;
 }
 
@@ -227,7 +259,7 @@ const METRICS_SCHEMA = {
     solids: { type: "integer", minimum: 0 },
     faces: { type: "integer", minimum: 0 },
     edges: { type: "integer", minimum: 0 },
-    density_kg_m3: { type: "number", minimum: 0 },
+    density_kg_m3: { type: "number", exclusiveMinimum: 0 },
     mass_kg: { type: "number", minimum: 0 },
   },
 } as const;
@@ -359,16 +391,23 @@ export const executeTools: CadTool[] = [
     _meta: { ui: { resourceUri: RESULTS_VIEWER_URI } },
     inputSchema: {
       type: "object",
+      additionalProperties: false,
       properties: {
-        script: { type: "string", description: SCRIPT_DESCRIPTION },
+        script: {
+          type: "string",
+          minLength: 1,
+          description: SCRIPT_DESCRIPTION,
+        },
         density_kg_m3: {
           type: "number",
+          exclusiveMinimum: 0,
           description:
             "Material density in kg/m³ (e.g. 2700 for aluminium 6061, 7850 " +
             "for steel). Optional — omitting it omits mass_kg from the result.",
         },
         timeout_ms: {
-          type: "number",
+          type: "integer",
+          minimum: 1,
           description: "Execution time limit in milliseconds (default 60000)",
         },
       },
@@ -398,26 +437,37 @@ export const executeTools: CadTool[] = [
     _meta: { ui: { resourceUri: RESULTS_VIEWER_URI } },
     inputSchema: {
       type: "object",
+      additionalProperties: false,
       properties: {
-        script: { type: "string", description: SCRIPT_DESCRIPTION },
+        script: {
+          type: "string",
+          minLength: 1,
+          description: SCRIPT_DESCRIPTION,
+        },
         formats: {
           type: "array",
           items: { type: "string", enum: ["step", "stl", "gltf"] },
           minItems: 1,
+          maxItems: 3,
+          uniqueItems: true,
           description: "One or more formats to export",
         },
         name: {
           type: "string",
+          minLength: 1,
+          maxLength: 251,
           description:
             "Base file name without extension (e.g. 'bracket'). Directory " +
             "components are stripped.",
         },
         density_kg_m3: {
           type: "number",
+          exclusiveMinimum: 0,
           description: "Material density in kg/m³, for mass_kg in the metrics",
         },
         timeout_ms: {
-          type: "number",
+          type: "integer",
+          minimum: 1,
           description: "Execution time limit in milliseconds (default 60000)",
         },
       },
@@ -449,9 +499,9 @@ export const executeTools: CadTool[] = [
     name: GLTF_ARTIFACT_TOOL,
     description:
       "App-only helper that reads one binary glTF export for the interactive " +
-      "viewer. It accepts only a .glb basename, resolves it inside " +
-      "BUILD123D_EXPORT_DIR, rejects symlink escapes and applies a bounded " +
-      "payload limit.",
+      "viewer. It accepts a .glb basename and the exact files[].sha256 digest, " +
+      "resolves the file inside BUILD123D_EXPORT_DIR, rejects symlink escapes " +
+      "and digest mismatches, and applies a bounded payload limit.",
     category: "execute",
     _meta: {
       ui: {
@@ -470,13 +520,20 @@ export const executeTools: CadTool[] = [
           description:
             "Safe GLB basename returned in build123d_export.files[].viewer.name",
         },
+        expected_sha256: {
+          type: "string",
+          pattern: SHA256_HEX_PATTERN,
+          description:
+            "Lowercase SHA-256 of the exact exported GLB bytes (files[].sha256)",
+        },
       },
-      required: ["name"],
+      required: ["name", "expected_sha256"],
     },
     outputSchema: GLTF_ARTIFACT_OUTPUT_SCHEMA,
     handler: async (args) => {
       const name = args.name as string;
-      const bytes = await readGltfArtifact(name);
+      const expectedSha256 = args.expected_sha256 as string;
+      const bytes = await readGltfArtifact(name, expectedSha256);
       const payload: GltfArtifactStructuredContent = {
         schemaVersion: "1.0",
         kind: "gltf-binary",

@@ -17,7 +17,11 @@ import {
   Toolbar,
 } from "@casys/mcp-view/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { decodeGltfArtifact, type ExportFile } from "./contract.ts";
+import {
+  decodeGltfArtifact,
+  type ExportFile,
+  gltfViewerReadArguments,
+} from "./contract.ts";
 import {
   BUILD123D_COMPONENT_KEYS,
   BUILD123D_DEFAULT_SURFACE,
@@ -87,7 +91,8 @@ const GeometryCanvas = ({ data, context }: Props) => {
     controller.current = undefined;
     setWireframe(false);
 
-    if (!target || !gltf?.viewer) {
+    const viewer = gltf?.viewer;
+    if (!target || !gltf || !viewer) {
       setPhase({
         kind: "empty",
         detail: gltf
@@ -103,8 +108,15 @@ const GeometryCanvas = ({ data, context }: Props) => {
 
     void (async () => {
       try {
-        const artifact = await context.callTool(gltf.viewer!.toolName, {
-          name: gltf.viewer!.name,
+        const read = gltfViewerReadArguments(gltf);
+        if (!read) {
+          throw new Error(
+            "This GLB export does not provide a bounded viewer reference.",
+          );
+        }
+        const artifact = await context.callTool(viewer.toolName, {
+          name: read.name,
+          expected_sha256: read.expected_sha256,
         });
         if (artifact.isError) {
           throw new Error(
@@ -142,7 +154,13 @@ const GeometryCanvas = ({ data, context }: Props) => {
       mounted?.dispose();
       if (controller.current === mounted) controller.current = undefined;
     };
-  }, [context, gltf?.path, gltf?.viewer?.name, gltf?.viewer?.toolName]);
+  }, [
+    context,
+    gltf?.path,
+    gltf?.sha256,
+    gltf?.viewer?.name,
+    gltf?.viewer?.toolName,
+  ]);
 
   const controls = (
     <Toolbar label="3D model controls">

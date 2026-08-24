@@ -26,7 +26,7 @@ export function createCadMcpApp(
   );
   const app = new McpApp({
     name: "mcp-build123d",
-    version: "0.4.1",
+    version: "0.4.2",
     transport: "stateless",
     maxConcurrent: 4,
     backpressureStrategy: "queue",
