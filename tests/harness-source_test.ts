@@ -1,4 +1,5 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { ASSEMBLY_INTEGRITY_HARNESS_SOURCE } from "../src/api/assembly-integrity-harness-source.ts";
 import { HARNESS_SOURCE } from "../src/api/harness-source.ts";
 
 Deno.test("harness source module stays in sync with harness.py", async () => {
@@ -13,5 +14,22 @@ Deno.test("harness source module stays in sync with harness.py", async () => {
   assertStringIncludes(
     HARNESS_SOURCE,
     "timestamp=STEP_FILE_NAME_TIMESTAMP_SENTINEL",
+  );
+});
+
+Deno.test("assembly-integrity harness source module stays in sync with its fixed observer", async () => {
+  const harnessPath = new URL(
+    "../src/api/assembly-integrity-harness.py",
+    import.meta.url,
+  );
+  assertEquals(
+    ASSEMBLY_INTEGRITY_HARNESS_SOURCE,
+    await Deno.readTextFile(harnessPath),
+  );
+  assertStringIncludes(ASSEMBLY_INTEGRITY_HARNESS_SOURCE, "GetLocation_s");
+  assertStringIncludes(ASSEMBLY_INTEGRITY_HARNESS_SOURCE, "FileUnits");
+  assertStringIncludes(
+    ASSEMBLY_INTEGRITY_HARNESS_SOURCE,
+    "SetMultiThread(False)",
   );
 });

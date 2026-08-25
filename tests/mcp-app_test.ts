@@ -1,5 +1,6 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { CadToolsClient } from "../src/client.ts";
+import { ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES } from "../src/api/assembly-integrity-bridge.ts";
 import { createCadMcpApp } from "../src/server-app.ts";
 import { geometryToolResult } from "../src/tools/execute.ts";
 import {
@@ -116,6 +117,7 @@ Deno.test("build123d MCP App tools publish the shared viewer and explicit output
     "build123d_execute",
     "build123d_export",
     "build123d_export_read",
+    "build123d_observe_assembly_integrity",
   ]);
   for (const tool of tools) {
     if (tool.name === "build123d_export_read") {
@@ -126,6 +128,20 @@ Deno.test("build123d MCP App tools publish the shared viewer and explicit output
         (tool.outputSchema.properties as { kind: { const: string } }).kind
           .const,
         "gltf-binary",
+      );
+      continue;
+    }
+    if (tool.name === "build123d_observe_assembly_integrity") {
+      assertEquals(tool._meta, undefined);
+      assertEquals(
+        (tool.outputSchema.properties as { kind: { const: string } }).kind
+          .const,
+        "assembly-integrity-observation",
+      );
+      assertEquals(
+        (tool.inputSchema as { additionalProperties: boolean })
+          .additionalProperties,
+        false,
       );
       continue;
     }
@@ -195,13 +211,26 @@ Deno.test("build123d tools/list uses the stateless 2026 wire contract", async ()
     // A model-only tools/list does not advertise the app-only GLB reader.
     assertEquals(
       body.result.tools.map((tool) => tool.name),
-      ["build123d_execute", "build123d_export"],
+      [
+        "build123d_execute",
+        "build123d_export",
+        "build123d_observe_assembly_integrity",
+      ],
     );
     for (const tool of body.result.tools) {
       if (tool.name === "build123d_export_read") {
         assertEquals((tool._meta as { ui: unknown }).ui, {
           resourceUri: ARTIFACT_HELPER_VIEWER_URI,
         });
+        continue;
+      }
+      if (tool.name === "build123d_observe_assembly_integrity") {
+        assertEquals(tool._meta, undefined);
+        assertEquals(
+          (tool.outputSchema as { properties: { kind: { const: string } } })
+            .properties.kind.const,
+          "assembly-integrity-observation",
+        );
         continue;
       }
       assertEquals(
@@ -264,7 +293,7 @@ Deno.test("build123d server/discover uses the 2026-07-28 stateless wire without 
     );
     assertEquals(body.result.serverInfo, {
       name: "mcp-build123d",
-      version: "0.4.2",
+      version: "0.5.0",
     });
   } finally {
     await http.shutdown();
@@ -284,7 +313,7 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
   try {
     const assembly = createCadMcpApp({
       viewerModuleUrl:
-        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.4.2/server.ts`,
+        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.5.0/server.ts`,
     });
     assertEquals(assembly.viewers, {
       registered: ["results-viewer", "artifact-helper-viewer"],
@@ -300,8 +329,8 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
       "published CAD result",
     );
     assertEquals(seen, [
-      "/@casys/mcp-build123d/0.4.2/src/ui/dist/results-viewer/index.html",
-      "/@casys/mcp-build123d/0.4.2/src/ui/dist/artifact-helper-viewer/index.html",
+      "/@casys/mcp-build123d/0.5.0/src/ui/dist/results-viewer/index.html",
+      "/@casys/mcp-build123d/0.5.0/src/ui/dist/artifact-helper-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();
@@ -326,7 +355,7 @@ Deno.test("build123d result viewer is registered when its HTML bundle exists", a
     registered: ["results-viewer"],
     skipped: ["artifact-helper-viewer"],
   });
-  assertEquals(assembly.app.getToolCount(), 3);
+  assertEquals(assembly.app.getToolCount(), 4);
   assertEquals(assembly.app.hasResource(RESULTS_VIEWER_URI), true);
   assertEquals(
     (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))?.text,
@@ -427,6 +456,40 @@ Deno.test("build123d input schemas reject extra properties and invalid bounds on
       JSON.stringify(fractionalTimeout.body.error),
       "integer",
     );
+  } finally {
+    await http.shutdown();
+  }
+});
+
+Deno.test("assembly-integrity HTTP cap admits a legal-size inline artifact envelope", async () => {
+  const assembly = createCadMcpApp({
+    viewerModuleUrl: "file:///project/server.ts",
+    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
+  });
+  const port = startOnFreePort();
+  const http = await assembly.app.startHttp({
+    port,
+    maxBodyBytes: ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES,
+    onListen: () => {},
+  });
+  try {
+    // 1 MiB crosses the generic server default. It is structurally valid
+    // base64; the deliberately wrong digest proves the request reached the
+    // observer bridge rather than being rejected as HTTP 413.
+    const blob = "A".repeat(1_048_576);
+    const response = await mcpRpc(port, "tools/call", {
+      name: "build123d_observe_assembly_integrity",
+      arguments: {
+        step: {
+          mimeType: "model/step",
+          sha256: "0".repeat(64),
+          bytes: 786_432,
+          blob,
+        },
+      },
+    });
+    assertEquals(response.status === 413, false);
+    assertStringIncludes(JSON.stringify(response.body.error), "sha256");
   } finally {
     await http.shutdown();
   }

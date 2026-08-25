@@ -4,6 +4,7 @@ import { McpApp } from "@casys/mcp-server";
 import { CadToolsClient } from "./client.ts";
 import { GLTF_ARTIFACT_TOOL } from "./tools/execute.ts";
 import { registerBuild123dViewers, type ViewerFilesystem } from "./viewers.ts";
+import { MCP_BUILD123D_VERSION } from "./version.ts";
 
 export interface CreateCadMcpAppOptions {
   categories?: string[];
@@ -26,7 +27,7 @@ export function createCadMcpApp(
   );
   const app = new McpApp({
     name: "mcp-build123d",
-    version: "0.4.2",
+    version: MCP_BUILD123D_VERSION,
     transport: "stateless",
     maxConcurrent: 4,
     backpressureStrategy: "queue",

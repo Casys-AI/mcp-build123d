@@ -1,12 +1,13 @@
 {
   "name": "@casys/mcp-build123d",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "tasks": {
     "serve": "deno run --allow-all server.ts --port=3014",
     "compile": "deno compile -A --output mcp-build123d server.ts",
     "test": "deno test --allow-all tests/",
     "build:ui": "deno run --allow-env --allow-net --allow-read --allow-run --allow-write scripts/build-results-viewer.ts",
-    "generate:harness-source": "deno run --allow-read --allow-write scripts/generate-harness-source.ts && deno fmt src/api/harness-source.ts"
+    "generate:harness-source": "deno run --allow-read --allow-write scripts/generate-harness-source.ts && deno fmt src/api/harness-source.ts",
+    "generate:assembly-integrity-harness-source": "deno run --allow-read --allow-write scripts/generate-assembly-integrity-harness-source.ts && deno fmt src/api/assembly-integrity-harness-source.ts"
   },
   "exports": {
     ".": "./mod.ts",
@@ -23,6 +24,7 @@
       "src/**/*.html",
       "src/ui/dist/**/*.html",
       "src/api/harness.py",
+      "src/api/assembly-integrity-harness.py",
       "README.md",
       "LICENSE"
     ],

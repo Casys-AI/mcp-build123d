@@ -18,6 +18,8 @@ agent writes build123d script
    build123d_export  ──► part.step   → FEA meshing (Gmsh, CalculiX), other CAD
                    part.stl    → 3D printing
                    part.glb    → 3D viewers
+
+exact STEP bytes ──► build123d_observe_assembly_integrity ──► factual XCAF/OCCT assembly observation
 ```
 
 At a glance:
@@ -29,6 +31,9 @@ At a glance:
 - Every exported file includes its exact byte count and SHA-256 digest.
 - Mass is reported only from an explicit uniform density. No material or density
   is guessed.
+- `build123d_observe_assembly_integrity` accepts one bounded, digest-bound STEP
+  artifact only; it never executes caller code and returns factual import, unit,
+  topology, occurrence, placement and pair observations.
 
 ## Why CAD-as-code for agents
 
@@ -68,7 +73,7 @@ curl http://127.0.0.1:3014/health
 
 ### Run the published package
 
-This checkout prepares unpublished `0.4.2`. The currently published JSR package
+This checkout prepares unpublished `0.5.0`. The currently published JSR package
 remains `0.4.1` and can be started directly; Python and build123d are still host
 dependencies:
 
@@ -183,7 +188,7 @@ that the script was reviewed, admitted, requirement-compliant, or canonical for
 a product Digital Thread.
 
 In `casys-digital-thread`, the canonical STEP route is the governed technical
-source capture and compilation review followed by `compile.seal-admission@2`,
+source capture and compilation review followed by `compile.seal-admission@3`,
 `project_admitted_geometry_export`, and `design.write-geometry@1`. The separate
 `design.execute-build123d@1` isolated execution and
 `design.seal-isolated-geometry@1` publication path is documentary, not the
@@ -379,6 +384,55 @@ Example tool input using the script above:
 }
 ```
 
+### `build123d_observe_assembly_integrity`
+
+Observes one exact STEP Part 21 artifact without executing caller code. Its
+closed input is deliberately small:
+
+```json
+{
+  "step": {
+    "mimeType": "model/step",
+    "sha256": "lowercase-sha256-of-the-decoded-bytes",
+    "bytes": 32536,
+    "blob": "canonical-padded-base64-of-those-exact-bytes"
+  }
+}
+```
+
+`bytes` must be positive and at most 128 MiB. The bridge rehashes and checks the
+Part 21 envelope before staging the bytes privately for a fixed OCCT/XCAF
+harness. There are no caller-selected paths, Python, tolerances, transforms or
+timeouts.
+
+The versioned `build123d-assembly-integrity-observation/1.0` result carries the
+exact input identity, fixed method, and a closed producer block:
+
+```json
+{
+  "producer": {
+    "service": "mcp-build123d",
+    "packageVersion": "0.5.0",
+    "tool": "build123d_observe_assembly_integrity",
+    "engine": { "name": "cadquery-ocp", "version": "7.9.3.1" }
+  }
+}
+```
+
+Every fact is either `observed`, `unresolved`, or `unavailable`. Direct
+occurrences are printable-ASCII labels sorted bytewise (maximum 32). An observed
+placement is a row-major rigid 4×4 XCAF `Location` matrix in the STEP file's
+observed millimetres; it is not an expected or requested pose. The tool emits
+every canonical direct-label pair (maximum 496) with the fixed `1e-6 mm`
+tolerance, minimum distance, intersection volume, and `contact` fact. These are
+kernel facts, not a pass/fail decision. The contract has no project,
+requirement, fitness, safety, motion, strength, or verdict fields.
+
+The `producer.engine` block identifies the installed `cadquery-ocp` binding
+whose `OCP.__version__` is read by the fixed harness. It does not claim a
+Standard OCCT API build version, an image digest, or a sandbox/network policy
+attestation; the fixed method still describes the OCCT/XCAF observation.
+
 ### Content and digest semantics
 
 - Each call runs the script once. `build123d_export` derives all requested
@@ -419,8 +473,11 @@ src/
   api/
     harness.py          # Python side: exec script, compute metrics, export
     python-bridge.ts    # Deno side: subprocess, JSON over stdin/stdout
+    assembly-integrity-harness.py # fixed OCCT/XCAF factual STEP observer
+    assembly-integrity-bridge.ts  # digest-bound staging and receipt parser
   tools/
     execute.ts          # execute, export and app-only GLB reader
+    assembly-integrity.ts # standalone factual assembly observation
   ui/results-viewer/    # small CAD components plus non-composable GLB helper
   client.ts             # CadToolsClient
 tests/                  # contract, wire, viewer and real build123d tests

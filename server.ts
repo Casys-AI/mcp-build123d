@@ -12,6 +12,7 @@
  */
 
 import { createCadMcpApp } from "./src/server-app.ts";
+import { ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES } from "./src/api/assembly-integrity-bridge.ts";
 
 const DEFAULT_HTTP_PORT = 3014;
 
@@ -35,6 +36,9 @@ async function main() {
   await server.startHttp({
     port: httpPort,
     hostname,
+    // The observer's closed artifact envelope is inline base64. Keep this cap
+    // finite, but large enough for its documented 128 MiB decoded STEP bound.
+    maxBodyBytes: ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES,
     cors: true,
     onListen: (info) => {
       console.error(

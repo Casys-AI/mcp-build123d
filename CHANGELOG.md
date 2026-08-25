@@ -2,9 +2,23 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
-## [0.4.2] - Unreleased
+## [0.5.0] - Unreleased
 
-This checkout prepares 0.4.2; it is not published.
+This checkout prepares 0.5.0; it is not published.
+
+- **Fixed STEP-only assembly observation.**
+  `build123d_observe_assembly_integrity` accepts one digest-bound, bounded,
+  canonical-base64 `model/step` artifact and returns only XCAF/OCCT facts:
+  importability, explicit file units, BREP topology, direct occurrence labels
+  and locations, and deterministic pair distance/intersection/contact metrics.
+  It accepts no caller code, path, tolerance, transform or runtime option.
+- **Closed factual response provenance.** The observation binds the exact input
+  artifact, fixed OCCT method, and the fixed `mcp-build123d` / `cadquery-ocp`
+  producer identity. This is not a sandbox or network-denied attestation, and it
+  does not make a product judgement.
+- **Bounded HTTP transport.** The server explicitly admits the maximum legal
+  inline STEP envelope (128 MiB decoded plus finite JSON-RPC overhead), instead
+  of inheriting the generic 1 MiB HTTP body limit.
 
 - **Native deterministic STEP timestamps.** `build123d_export` passes the UTC
   sentinel `1970-01-01T00:00:00Z` to build123d 0.11.1's native
