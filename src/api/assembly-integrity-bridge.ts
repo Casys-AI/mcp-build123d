@@ -778,7 +778,10 @@ function enumValue<T extends readonly string[]>(
 }
 
 function nonNegativeInteger(value: unknown, path: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+  if (
+    !Number.isSafeInteger(value) || (value as number) < 0 ||
+    Object.is(value, -0)
+  ) {
     throw new AssemblyIntegrityObservationError(
       `${path} must be a non-negative safe integer.`,
     );

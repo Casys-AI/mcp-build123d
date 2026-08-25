@@ -423,6 +423,22 @@ Deno.test("assembly integrity rejects tampered, nonclosed and noncanonical obser
       "non-negative finite",
     );
 
+    const negativeZeroTopology = structuredClone(observation) as Record<
+      string,
+      unknown
+    >;
+    (((negativeZeroTopology.topology as Record<string, unknown>)
+      .solidCount as Record<string, unknown>).value) = -0;
+    assertThrows(
+      () =>
+        parseAssemblyIntegrityObservation(
+          negativeZeroTopology,
+          artifact(fixture.input),
+        ),
+      AssemblyIntegrityObservationError,
+      "non-negative safe integer",
+    );
+
     const reversedPair = structuredClone(observation) as Record<
       string,
       unknown
