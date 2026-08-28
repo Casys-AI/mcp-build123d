@@ -677,6 +677,37 @@ Deno.test("the result viewer is the only registered viewer and loads from its pu
   }
 });
 
+Deno.test("viewer resource failures never expose host paths through HTTP", async () => {
+  const secret = "/Users/secret/results-viewer.html";
+  const assembly = createCadMcpApp({
+    viewerFilesystem: {
+      exists: () => true,
+      readFile: () => {
+        throw new Error(`viewer read failed: ${secret}`);
+      },
+    },
+  });
+  const port = startOnFreePort();
+  const http = await assembly.app.startHttp({ port, onListen: () => {} });
+  try {
+    const response = await mcpRpc(port, "resources/read", {
+      uri: RESULTS_VIEWER_URI,
+    });
+    assertEquals(response.body.result, undefined);
+    assertNoHostPath(response.body, secret);
+    assertEquals(
+      JSON.stringify(response.body).includes("viewer read failed"),
+      false,
+    );
+    assertStringIncludes(
+      JSON.stringify(response.body),
+      "results viewer could not be read",
+    );
+  } finally {
+    await http.shutdown();
+  }
+});
+
 Deno.test("the generated result viewer uses resources/read instead of a private tool", async () => {
   const assembly = createCadMcpApp();
   assertEquals(assembly.viewers, {

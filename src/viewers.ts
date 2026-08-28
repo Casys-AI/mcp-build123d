@@ -20,6 +20,9 @@ export interface ViewerFilesystem {
   readFile(path: string): string | Promise<string>;
 }
 
+const VIEWER_READ_FAILURE =
+  "The build123d results viewer could not be read by the server.";
+
 const localFilesystem: ViewerFilesystem = {
   exists: (path) => {
     // JSR modules resolve their bundled viewer to HTTPS. It is shipped through
@@ -50,10 +53,25 @@ export function registerBuild123dViewers(
   filesystem: ViewerFilesystem = localFilesystem,
   moduleUrl = MODULE_URL,
 ): { registered: string[]; skipped: string[] } {
+  const safeFilesystem: ViewerFilesystem = {
+    exists: filesystem.exists,
+    readFile: async (path) => {
+      try {
+        return await filesystem.readFile(path);
+      } catch (error) {
+        console.error(
+          `[mcp-build123d] results viewer read failure: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        throw new Error(VIEWER_READ_FAILURE);
+      }
+    },
+  };
   return app.registerViewers({
     prefix: "mcp-build123d",
     moduleUrl,
     viewers: VIEWERS,
-    ...filesystem,
+    ...safeFilesystem,
   });
 }
