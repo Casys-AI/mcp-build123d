@@ -1,7 +1,7 @@
 # Exact multi-architecture Deno base image for the published provider runtime.
 FROM denoland/deno:debian-2.9.6@sha256:2014dc167ece617ef7e7ba40631ac2234c59e75ce693e7cc2dc2602b3c87859d
 
-ARG VERSION=0.6.0
+ARG VERSION=0.6.1
 ARG VCS_REF=unknown
 ARG CREATED=unknown
 

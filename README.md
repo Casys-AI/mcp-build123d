@@ -111,12 +111,12 @@ For example, a checkout-backed stdio entry is:
 
 ### Run the published package
 
-The published JSR package `0.6.0` can be started directly; Python and build123d
+The published JSR package `0.6.1` can be started directly; Python and build123d
 are still host dependencies:
 
 ```bash
 BUILD123D_PYTHON_BIN="$PWD/.venv/bin/python" \
-  deno run -A jsr:@casys/mcp-build123d@0.6.0/server --port=3014
+  deno run -A jsr:@casys/mcp-build123d@0.6.1/server --port=3014
 ```
 
 `-A` is intentional here: the public tools run arbitrary Python and write
@@ -138,7 +138,7 @@ file location depends on the host; the connection entry is typically:
 ```
 
 HTTP binds to `127.0.0.1` by default; `--hostname=0.0.0.0` is an explicit
-network exposure. The `0.6.0` checkout supports native stdio and the
+network exposure. The `0.6.1` checkout supports native stdio and the
 digest-bound resource contract described below.
 
 ### Run the published provider image
@@ -153,7 +153,7 @@ mkdir -p "$PWD/cad-exports"
 docker run --rm \
   --publish 127.0.0.1:3014:3014 \
   --volume "$PWD/cad-exports:/exports" \
-  ghcr.io/casys-ai/mcp-build123d:0.6.0
+  ghcr.io/casys-ai/mcp-build123d:0.6.1
 ```
 
 ### Build a checkout locally
@@ -441,7 +441,7 @@ exact input identity, fixed method, and a closed producer block:
 {
   "producer": {
     "service": "mcp-build123d",
-    "packageVersion": "0.6.0",
+    "packageVersion": "0.6.1",
     "tool": "build123d_observe_assembly_integrity",
     "engine": { "name": "cadquery-ocp", "version": "7.9.3.1" }
   }

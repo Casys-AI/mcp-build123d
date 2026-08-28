@@ -2,6 +2,12 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [0.6.1] - 2026-08-29
+
+- **Release-gate correction.** The container Deno identity check now matches the
+  exact `2.9.6` version prefix emitted by `deno --version`, while allowing its
+  platform suffix. No provider contract or runtime qualification changed.
+
 ## [0.6.0] - 2026-08-29
 
 - **Bounded provider execution.** Scripts, bridge stdout/stderr, individual

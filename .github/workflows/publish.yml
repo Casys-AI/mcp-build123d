@@ -69,7 +69,7 @@ jobs:
             CREATED=${{ github.event.head_commit.timestamp }}
 
       - name: Verify exact Deno runtime
-        run: docker run --rm --entrypoint deno mcp-build123d:smoke --version | grep -Fx 'deno 2.9.6'
+        run: docker run --rm --entrypoint deno mcp-build123d:smoke --version | grep -E '^deno 2\.9\.6( |$)'
 
       - name: Smoke HTTP, native stdio, and OCCT
         run: bash scripts/smoke-container.sh mcp-build123d:smoke

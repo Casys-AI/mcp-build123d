@@ -5,30 +5,30 @@ import {
 } from "../scripts/release-guard.ts";
 
 Deno.test("release guard requires the exact v-prefixed package tag", () => {
-  assertMatchingReleaseRef("refs/tags/v0.6.0", "0.6.0");
+  assertMatchingReleaseRef("refs/tags/v0.6.1", "0.6.1");
   assertThrows(
-    () => assertMatchingReleaseRef("refs/tags/v0.6.1", "0.6.0"),
+    () => assertMatchingReleaseRef("refs/tags/v0.6.2", "0.6.1"),
     Error,
-    "refs/tags/v0.6.0",
+    "refs/tags/v0.6.1",
   );
   assertThrows(
-    () => assertMatchingReleaseRef("refs/tags/V0.6.0", "0.6.0"),
+    () => assertMatchingReleaseRef("refs/tags/V0.6.1", "0.6.1"),
     Error,
-    "refs/tags/v0.6.0",
+    "refs/tags/v0.6.1",
   );
 });
 
 Deno.test("release guard makes JSR reruns a no-op only for an exact version", () => {
   assertEquals(
-    jsrPublicationDecision({ versions: { "0.6.0": {} } }, "0.6.0"),
+    jsrPublicationDecision({ versions: { "0.6.1": {} } }, "0.6.1"),
     "already-published",
   );
   assertEquals(
-    jsrPublicationDecision({ versions: { "0.5.1": {} } }, "0.6.0"),
+    jsrPublicationDecision({ versions: { "0.5.1": {} } }, "0.6.1"),
     "publish",
   );
   assertThrows(
-    () => jsrPublicationDecision({ versions: [] }, "0.6.0"),
+    () => jsrPublicationDecision({ versions: [] }, "0.6.1"),
     Error,
     "versions object",
   );
