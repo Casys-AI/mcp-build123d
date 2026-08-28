@@ -153,7 +153,7 @@ mkdir -p "$PWD/cad-exports"
 docker run --rm \
   --publish 127.0.0.1:3014:3014 \
   --volume "$PWD/cad-exports:/exports" \
-  ghcr.io/casys-ai/mcp-build123d:0.6.1
+  ghcr.io/casys-ai/mcp-build123d@sha256:765d73ca6a15b6112d3693a298514ae4ff1a8ce85485cf5cf4074b41c218142d
 ```
 
 ### Build a checkout locally
