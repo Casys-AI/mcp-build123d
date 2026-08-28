@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-build123d",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "tasks": {
     "serve": "deno run --allow-all server.ts --port=3014",
     "serve:stdio": "deno run --allow-all server.ts --stdio",
@@ -31,6 +31,7 @@
       "src/ui/dist/**/*.html",
       "src/api/harness.py",
       "src/api/assembly-integrity-harness.py",
+      "requirements/**/*.txt",
       "README.md",
       "CHANGELOG.md",
       "CITATION.cff",
@@ -44,7 +45,7 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.26.1",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@0.26.1",
     "ajv": "npm:ajv@^8.17.1",
     "hono": "npm:hono@^4",
     "hono/cors": "npm:hono@^4/cors",

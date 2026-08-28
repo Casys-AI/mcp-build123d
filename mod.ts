@@ -80,9 +80,16 @@ export {
 } from "./src/api/assembly-integrity-bridge.ts";
 export {
   CadExecutionError,
+  CadExecutionLimitError,
   PythonNotFoundError,
   runCadScript,
 } from "./src/api/python-bridge.ts";
+export {
+  assertQualifiedBuild123dRuntime,
+  Build123dRuntimeQualificationError,
+  QUALIFIED_BUILD123D_VERSION,
+  QUALIFIED_CADQUERY_OCP_VERSION,
+} from "./src/api/runtime.ts";
 export type {
   AssemblyIntegrityFact,
   AssemblyIntegrityInputArtifact,

@@ -3,6 +3,7 @@
 import {
   Build123dUnavailableError,
   CadExecutionError,
+  CadExecutionLimitError,
   PythonNotFoundError,
 } from "./api/python-bridge.ts";
 import {
@@ -149,6 +150,15 @@ function classify(error: unknown): PublicToolFailure {
       retryable: true,
     };
   }
+  if (error instanceof CadExecutionLimitError) {
+    return {
+      code: "execution.resource_limit",
+      message: "CAD execution exceeded a fixed provider resource limit.",
+      recovery:
+        "Reduce script, output, artifact complexity, or execution time, then run a new request; no result was issued.",
+      retryable: false,
+    };
+  }
   if (error instanceof CadExecutionError) {
     return {
       code: "cad.execution_failed",
@@ -188,6 +198,19 @@ function safeArtifactError(
         message: "Artifact integrity verification failed.",
         recovery:
           "Do not reuse a path or modified object; run build123d_export again to create a new verified resource.",
+      };
+    case "artifact.too_large":
+      return {
+        message: "An export exceeds the fixed artifact byte limit.",
+        recovery:
+          "Reduce export complexity or split the delivery, then run build123d_export again.",
+      };
+    case "artifact.store_capacity_exceeded":
+      return {
+        message:
+          "Current-process artifact storage reached its fixed byte budget.",
+        recovery:
+          "Read or persist issued artifact resources, then restart the server before requesting additional exports.",
       };
   }
 }

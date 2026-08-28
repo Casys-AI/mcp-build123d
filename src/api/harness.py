@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 import traceback
 
@@ -38,6 +39,17 @@ def fail(error: str, tb: str | None = None) -> None:
 
 
 def main() -> None:
+    # The Deno parent terminates this POSIX session (negative PID) on timeout
+    # or a bounded-I/O violation. This happens before caller Python is read or
+    # executed, so normal descendants cannot outlive an aborted CAD request.
+    if os.name != "posix":
+        fail("This provider requires POSIX process-group support for direct execution")
+        return
+    try:
+        os.setsid()
+    except OSError:
+        fail("This provider could not establish an isolated execution process group")
+        return
     try:
         request = json.load(sys.stdin)
     except json.JSONDecodeError as e:

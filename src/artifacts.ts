@@ -15,6 +15,10 @@ import type {
   CadMetrics,
   ExportSpec,
 } from "./api/python-bridge.ts";
+import {
+  collectBoundedChildOutput,
+  ProcessOutputLimitError,
+} from "./api/process.ts";
 import { MCP_BUILD123D_VERSION } from "./version.ts";
 
 export const BUILD123D_ARTIFACT_SCHEMA =
@@ -27,6 +31,11 @@ export const BUILD123D_EXPORT_EXECUTION_SCHEMA =
 const BUILD123D_EXPORT_REQUEST_SCHEMA = "build123d-export-request/1.0" as const;
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 const DELIVERY_READ_TIMEOUT_MS = 5_000;
+/** Maximum bytes for one promotable delivery artifact. */
+export const BUILD123D_MAXIMUM_ARTIFACT_BYTES = 32 * 1_024 * 1_024;
+/** Fixed current-process memory ceiling for all issued artifact resources. */
+export const BUILD123D_MAXIMUM_ARTIFACT_STORE_BYTES = 96 * 1_024 * 1_024;
+const DELIVERY_READER_MAXIMUM_STDERR_BYTES = 64 * 1_024;
 const DELIVERY_FILE_READER_SOURCE = String.raw`
 import os, stat, sys
 
@@ -163,7 +172,9 @@ export class Build123dArtifactError extends Error {
       | "artifact.integrity_failed"
       | "artifact.not_regular_file"
       | "artifact.outside_managed_root"
-      | "artifact.store_unavailable",
+      | "artifact.store_unavailable"
+      | "artifact.too_large"
+      | "artifact.store_capacity_exceeded",
     message: string,
     readonly recovery: string,
   ) {
@@ -213,6 +224,7 @@ function sha256Hex(bytes: Uint8Array): Promise<string> {
 async function readDeliveryFileWithinDeadline(
   root: string,
   relativePath: string,
+  maximumBytes: number,
 ): Promise<Uint8Array> {
   let child: Deno.ChildProcess;
   try {
@@ -233,13 +245,23 @@ async function readDeliveryFileWithinDeadline(
   const timer = setTimeout(() => {
     timedOut = true;
     try {
-      child.kill();
+      child.kill("SIGKILL");
     } catch {
       // The reader can exit naturally at the deadline boundary.
     }
   }, DELIVERY_READ_TIMEOUT_MS);
   try {
-    const result = await child.output();
+    const result = await collectBoundedChildOutput(child, {
+      maximumStdoutBytes: maximumBytes,
+      maximumStderrBytes: DELIVERY_READER_MAXIMUM_STDERR_BYTES,
+      terminate: () => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // The fixed reader can naturally exit at the byte-limit boundary.
+        }
+      },
+    });
     if (timedOut) {
       throw new Error("The isolated delivery reader exceeded its deadline.");
     }
@@ -609,6 +631,25 @@ export class Build123dArtifactStore {
         );
       }
 
+      const newBytes = descriptors.reduce(
+        (total, descriptor, index) =>
+          this.#objects.has(descriptor.uri)
+            ? total
+            : total + candidates[index].bytes.byteLength,
+        0,
+      );
+      const retainedBytes = Array.from(this.#objects.values()).reduce(
+        (total, bytes) => total + bytes.byteLength,
+        0,
+      );
+      if (retainedBytes + newBytes > BUILD123D_MAXIMUM_ARTIFACT_STORE_BYTES) {
+        throw new Build123dArtifactError(
+          "artifact.store_capacity_exceeded",
+          "Current-process artifact storage reached its fixed byte budget.",
+          "Read or persist already-issued artifacts, then restart the server before requesting additional exports.",
+        );
+      }
+
       for (let index = 0; index < descriptors.length; index += 1) {
         const descriptor = descriptors[index];
         const bytes = candidates[index].bytes;
@@ -653,6 +694,16 @@ export class Build123dArtifactStore {
   ): Promise<
     { format: ExportSpec["format"]; bytes: Uint8Array; sha256: string }
   > {
+    if (
+      !Number.isSafeInteger(file.bytes) || file.bytes < 1 ||
+      file.bytes > BUILD123D_MAXIMUM_ARTIFACT_BYTES
+    ) {
+      throw new Build123dArtifactError(
+        "artifact.too_large",
+        `Export '${file.format}' exceeds the fixed artifact byte limit.`,
+        "Reduce export complexity or split the delivery; no oversized artifact is read or retained by this server.",
+      );
+    }
     const root = await this.realManagedRoot(this.exportsDirectory, "export");
     const candidate = isAbsolute(file.path)
       ? file.path
@@ -688,6 +739,13 @@ export class Build123dArtifactStore {
         "Run build123d_export again with a writable managed export directory.",
       );
     }
+    if (stat.size > BUILD123D_MAXIMUM_ARTIFACT_BYTES) {
+      throw new Build123dArtifactError(
+        "artifact.too_large",
+        `Export '${file.format}' exceeds the fixed artifact byte limit.`,
+        "Reduce export complexity or split the delivery; no oversized artifact is read or retained by this server.",
+      );
+    }
     if (stat.size !== file.bytes) {
       throw new Build123dArtifactError(
         "artifact.integrity_failed",
@@ -698,9 +756,20 @@ export class Build123dArtifactStore {
     let bytes: Uint8Array;
     try {
       await this.beforeDeliveryRead?.(realPath);
-      bytes = await readDeliveryFileWithinDeadline(root, child);
+      bytes = await readDeliveryFileWithinDeadline(
+        root,
+        child,
+        BUILD123D_MAXIMUM_ARTIFACT_BYTES,
+      );
     } catch (error) {
       logArtifactFailure("delivery export read", error);
+      if (error instanceof ProcessOutputLimitError) {
+        throw new Build123dArtifactError(
+          "artifact.too_large",
+          `Export '${file.format}' exceeds the fixed artifact byte limit.`,
+          "Reduce export complexity or split the delivery; no oversized artifact is read or retained by this server.",
+        );
+      }
       throw new Build123dArtifactError(
         "artifact.integrity_failed",
         `Export '${file.format}' could not be read before promotion completed.`,

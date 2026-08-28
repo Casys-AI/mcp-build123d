@@ -1,2 +1,2 @@
 /** Single source for the MCP package and receipt producer version. */
-export const MCP_BUILD123D_VERSION = "0.5.1" as const;
+export const MCP_BUILD123D_VERSION = "0.6.0" as const;

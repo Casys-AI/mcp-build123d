@@ -11,13 +11,17 @@ import {
 } from "@std/assert";
 import { McpApp, SchemaValidator } from "@casys/mcp-server";
 import {
+  BUILD123D_MAXIMUM_ARTIFACT_BYTES,
   Build123dArtifactError,
   Build123dArtifactStore,
   createBuild123dExportExecution,
 } from "../src/artifacts.ts";
 import {
+  BUILD123D_MAXIMUM_HARNESS_STDOUT_BYTES,
   CadExecutionError,
+  CadExecutionLimitError,
   type CadMetrics,
+  runCadScript,
 } from "../src/api/python-bridge.ts";
 import { createCadMcpApp } from "../src/server-app.ts";
 import {
@@ -271,6 +275,88 @@ Deno.test("direct build123d_export refuses before Python or delivery staging", a
     }
     await Deno.remove(root, { recursive: true });
   }
+});
+
+Deno.test("direct execution fails closed before buffering oversized Python stdout", async () => {
+  const root = await Deno.makeTempDir({
+    prefix: "mcp-build123d-stdout-limit-",
+  });
+  const interpreter = `${root}/noisy-python`;
+  const previousPython = Deno.env.get("BUILD123D_PYTHON_BIN");
+  try {
+    await Deno.writeTextFile(
+      interpreter,
+      "#!/bin/sh\nhead -c 2097152 /dev/zero\n",
+      { mode: 0o700 },
+    );
+    Deno.env.set("BUILD123D_PYTHON_BIN", interpreter);
+    const error = await assertRejects(
+      () => runCadScript("result = fixture"),
+      CadExecutionLimitError,
+      "stdout",
+    );
+    assertEquals(error.limit, "stdout");
+    assertEquals(BUILD123D_MAXIMUM_HARNESS_STDOUT_BYTES < 2_097_152, true);
+  } finally {
+    if (previousPython === undefined) Deno.env.delete("BUILD123D_PYTHON_BIN");
+    else Deno.env.set("BUILD123D_PYTHON_BIN", previousPython);
+    await Deno.remove(root, { recursive: true });
+  }
+});
+
+cadTest(
+  "timeout terminates the Python execution process group and descendants",
+  async () => {
+    const root = await Deno.makeTempDir({
+      prefix: "mcp-build123d-process-tree-",
+    });
+    const marker = `${root}/descendant-survived`;
+    try {
+      const script = `
+from build123d import Box
+import subprocess
+subprocess.Popen(["/bin/sh", "-c", "sleep 0.4; touch ${marker}"])
+while True:
+    pass
+result = Box(1, 1, 1)
+`;
+      const error = await assertRejects(
+        () => runCadScript(script, { timeoutMs: 30 }),
+        CadExecutionLimitError,
+        "exceeded",
+      );
+      assertEquals(error.limit, "timeout");
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await assertRejects(() => Deno.stat(marker), Deno.errors.NotFound);
+    } finally {
+      await Deno.remove(root, { recursive: true });
+    }
+  },
+);
+
+Deno.test("artifact promotion rejects an oversized declared delivery before opening it", async () => {
+  await withServerRoots(async ({ exportsDirectory, artifactsDirectory }) => {
+    const assembly = testAssembly(exportsDirectory, artifactsDirectory);
+    const exportFile = {
+      format: "gltf" as const,
+      path: "never-read.glb",
+      bytes: BUILD123D_MAXIMUM_ARTIFACT_BYTES + 1,
+      sha256: "0".repeat(64),
+    };
+    const execution = await createBuild123dExportExecution({
+      script: "result = fixture",
+      formats: ["gltf"],
+      name: "never-read",
+      metrics: FIXTURE_METRICS,
+      exports: [exportFile],
+    });
+    const error = await assertRejects(
+      () => assembly.artifactStore.publishExports([exportFile], execution),
+      Build123dArtifactError,
+      "fixed artifact byte limit",
+    );
+    assertEquals(error.code, "artifact.too_large");
+  });
 });
 
 Deno.test("artifact promotion exposes verified immutable resources, never paths", async () => {

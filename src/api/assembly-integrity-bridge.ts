@@ -9,6 +9,10 @@
 
 import { join } from "@std/path";
 import { ASSEMBLY_INTEGRITY_HARNESS_SOURCE } from "./assembly-integrity-harness-source.ts";
+import {
+  collectBoundedChildOutput,
+  ProcessOutputLimitError,
+} from "./process.ts";
 import { MCP_BUILD123D_VERSION } from "../version.ts";
 
 export const ASSEMBLY_INTEGRITY_OBSERVATION_SCHEMA =
@@ -61,6 +65,7 @@ const STEP_MIME_TYPE = "model/step" as const;
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 const ASCII_LABEL = /^[\x21-\x7e]{1,255}$/;
 const MAXIMUM_HARNESS_RESPONSE_BYTES = 4 * 1_024 * 1_024;
+const MAXIMUM_HARNESS_STDERR_BYTES = 64 * 1_024;
 
 export interface AssemblyIntegrityInputArtifact {
   readonly mimeType: typeof STEP_MIME_TYPE;
@@ -309,11 +314,6 @@ async function runAssemblyIntegrityHarness(
     }
     throw error;
   }
-  const writer = child.stdin.getWriter();
-  await writer.write(
-    new TextEncoder().encode(JSON.stringify({ stepPath, inputArtifact })),
-  );
-  await writer.close();
   const timer = setTimeout(() => {
     try {
       child.kill("SIGKILL");
@@ -321,8 +321,52 @@ async function runAssemblyIntegrityHarness(
       // The fixed harness may already have exited.
     }
   }, ASSEMBLY_INTEGRITY_TIMEOUT_MS);
-  const { stdout, stderr, success } = await child.output();
-  clearTimeout(timer);
+  const result = collectBoundedChildOutput(child, {
+    maximumStdoutBytes: MAXIMUM_HARNESS_RESPONSE_BYTES,
+    maximumStderrBytes: MAXIMUM_HARNESS_STDERR_BYTES,
+    terminate: () => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // The fixed harness may already have exited at an output-limit boundary.
+      }
+    },
+  });
+  let inputWriteFailed = false;
+  const writer = child.stdin.getWriter();
+  try {
+    await writer.write(
+      new TextEncoder().encode(JSON.stringify({ stepPath, inputArtifact })),
+    );
+    await writer.close();
+  } catch {
+    // A harness that has already exited can close its input before Deno writes.
+    // Drain its bounded receipt, then return the same fixed-harness failure.
+    inputWriteFailed = true;
+    await writer.close().catch(() => undefined);
+  }
+  let stdout: Uint8Array;
+  let stderr: Uint8Array;
+  let success: boolean;
+  try {
+    ({ stdout, stderr, success } = await result);
+  } catch (error) {
+    if (error instanceof ProcessOutputLimitError) {
+      throw new AssemblyIntegrityObservationError(
+        "The fixed assembly-integrity harness produced no bounded response.",
+      );
+    }
+    throw new AssemblyIntegrityObservationError(
+      "The fixed assembly-integrity harness failed or timed out.",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+  if (inputWriteFailed) {
+    throw new AssemblyIntegrityObservationError(
+      "The fixed assembly-integrity harness failed or wrote stderr.",
+    );
+  }
   if (
     stdout.byteLength === 0 ||
     stdout.byteLength > MAXIMUM_HARNESS_RESPONSE_BYTES

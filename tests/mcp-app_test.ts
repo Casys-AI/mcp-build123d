@@ -6,6 +6,7 @@ import {
   ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES,
   AssemblyIntegrityObservationError,
 } from "../src/api/assembly-integrity-bridge.ts";
+import { CadExecutionLimitError } from "../src/api/python-bridge.ts";
 import { createBuild123dExportExecution } from "../src/artifacts.ts";
 import { createCadMcpApp } from "../src/server-app.ts";
 import { build123dToolErrorResult } from "../src/tool-errors.ts";
@@ -93,12 +94,19 @@ async function createFakeCadInterpreter(root: string): Promise<string> {
     harness,
     `
 const fixture = new Uint8Array(${JSON.stringify(Array.from(FIXTURE_GLB))});
-if (
-  Deno.args[0] === "-c" &&
-  Deno.args[1]?.includes("import os, stat, sys\\n")
-) {
+const sourceIndex = Deno.args.indexOf("-c");
+const source = sourceIndex >= 0 ? Deno.args[sourceIndex + 1] : undefined;
+if (source?.includes("cadqueryOcp")) {
+  console.log(JSON.stringify({
+    ok: true,
+    build123d: "0.11.1",
+    cadqueryOcp: "7.9.3.1",
+  }));
+  Deno.exit(0);
+}
+if (source?.includes("import os, stat, sys\\n")) {
   await Deno.stdout.write(
-    await Deno.readFile(Deno.args[2] + "/" + Deno.args[3]),
+    await Deno.readFile(Deno.args[sourceIndex + 2] + "/" + Deno.args[sourceIndex + 3]),
   );
   Deno.exit(0);
 }
@@ -304,7 +312,7 @@ Deno.test("HTTP discover and tools/list expose instructions, annotations and sta
     assertEquals(discover.status, 200);
     assertEquals(
       (discover.body.result as { serverInfo: unknown }).serverInfo,
-      { name: "mcp-build123d", version: "0.5.1" },
+      { name: "mcp-build123d", version: "0.6.0" },
     );
     assertStringIncludes(
       (discover.body.result as { instructions: string }).instructions,
@@ -659,7 +667,7 @@ Deno.test("the result viewer is the only registered viewer and loads from its pu
   try {
     const assembly = createCadMcpApp({
       viewerModuleUrl:
-        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.5.1/server.ts`,
+        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.6.0/server.ts`,
     });
     assertEquals(assembly.viewers, {
       registered: ["results-viewer"],
@@ -670,7 +678,7 @@ Deno.test("the result viewer is the only registered viewer and loads from its pu
       "published CAD result",
     );
     assertEquals(seen, [
-      "/@casys/mcp-build123d/0.5.1/src/ui/dist/results-viewer/index.html",
+      "/@casys/mcp-build123d/0.6.0/src/ui/dist/results-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();
@@ -771,4 +779,18 @@ Deno.test("assembly-integrity observer failures are structured and non-retryable
     "assembly_integrity.observation_failed",
   );
   assertEquals(result.structuredContent.retryable, false);
+});
+
+Deno.test("execution resource limits are structured, non-retryable recovery errors", () => {
+  const result = build123dToolErrorResult(
+    "build123d_execute",
+    new CadExecutionLimitError("stdout", "internal stdout limit detail"),
+  );
+  assertEquals(result.isError, true);
+  assertEquals(result.structuredContent.code, "execution.resource_limit");
+  assertEquals(result.structuredContent.retryable, false);
+  assertEquals(
+    JSON.stringify(result).includes("internal stdout limit detail"),
+    false,
+  );
 });

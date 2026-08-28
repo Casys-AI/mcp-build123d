@@ -204,7 +204,7 @@ backendTest(
       assertEquals(first.kind, "assembly-integrity-observation");
       assertEquals(first.producer, {
         service: "mcp-build123d",
-        packageVersion: "0.5.1",
+        packageVersion: "0.6.0",
         tool: "build123d_observe_assembly_integrity",
         engine: { name: "cadquery-ocp", version: "7.9.3.1" },
       });

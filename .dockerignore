@@ -1,0 +1,7 @@
+.git
+.github
+tests
+cad-exports
+coverage
+.DS_Store
+mcp-build123d

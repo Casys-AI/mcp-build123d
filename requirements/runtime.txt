@@ -1,0 +1,4 @@
+# Runtime requirements, constrained by requirements/constraints.txt in every
+# supported installation path (CI and the published provider image).
+build123d==0.11.1
+cadquery-ocp-novtk==7.9.3.1.1

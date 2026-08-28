@@ -15,10 +15,16 @@
 
 import { createCadMcpApp } from "./src/server-app.ts";
 import { ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES } from "./src/api/assembly-integrity-bridge.ts";
+import {
+  assertQualifiedBuild123dRuntime,
+  QUALIFIED_BUILD123D_VERSION,
+  QUALIFIED_CADQUERY_OCP_VERSION,
+} from "./src/api/runtime.ts";
 
 const DEFAULT_HTTP_PORT = 3014;
 
 async function main() {
+  await assertQualifiedBuild123dRuntime();
   const args = Deno.args;
   const stdio = args.includes("--stdio");
 
@@ -70,7 +76,10 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error("[mcp-build123d] Fatal error:", error);
+    const message = error instanceof Error ? error.message : "startup failed";
+    console.error(
+      `[mcp-build123d] Fatal error: ${message} Recovery: set BUILD123D_PYTHON_BIN to Python with build123d ${QUALIFIED_BUILD123D_VERSION} and cadquery-ocp ${QUALIFIED_CADQUERY_OCP_VERSION}.`,
+    );
     Deno.exit(1);
   });
 }

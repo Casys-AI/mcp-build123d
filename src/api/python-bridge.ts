@@ -10,6 +10,14 @@
  */
 
 import { HARNESS_SOURCE } from "./harness-source.ts";
+import {
+  collectBoundedChildOutput,
+  ProcessOutputLimitError,
+} from "./process.ts";
+
+export const BUILD123D_MAXIMUM_SCRIPT_BYTES = 256 * 1_024;
+export const BUILD123D_MAXIMUM_HARNESS_STDOUT_BYTES = 1 * 1_024 * 1_024;
+export const BUILD123D_MAXIMUM_HARNESS_STDERR_BYTES = 64 * 1_024;
 
 /** Raised when the Python interpreter cannot be found. */
 export class PythonNotFoundError extends Error {
@@ -36,6 +44,17 @@ export class Build123dUnavailableError extends CadExecutionError {
   constructor(message: string, pythonTraceback?: string) {
     super(message, pythonTraceback);
     this.name = "Build123dUnavailableError";
+  }
+}
+
+/** The caller exceeded a server-owned script or subprocess-output budget. */
+export class CadExecutionLimitError extends CadExecutionError {
+  constructor(
+    readonly limit: "script" | "stdout" | "stderr" | "timeout",
+    message: string,
+  ) {
+    super(message);
+    this.name = "CadExecutionLimitError";
   }
 }
 
@@ -89,6 +108,37 @@ function pythonBin(): string {
   return Deno.env.get("BUILD123D_PYTHON_BIN") ?? "python3";
 }
 
+function assertScriptWithinLimit(script: string): void {
+  if (
+    new TextEncoder().encode(script).byteLength > BUILD123D_MAXIMUM_SCRIPT_BYTES
+  ) {
+    throw new CadExecutionLimitError(
+      "script",
+      `CAD script exceeds the fixed ${BUILD123D_MAXIMUM_SCRIPT_BYTES}-byte limit.`,
+    );
+  }
+}
+
+/** Kill the POSIX session created by the trusted Python harness. */
+function killExecutionTree(child: Deno.ChildProcess): void {
+  try {
+    if (Deno.build.os !== "windows") {
+      // The harness calls os.setsid() before it accepts caller code, making its
+      // PID the process-group ID. A negative PID signals ordinary descendants.
+      Deno.kill(-child.pid, "SIGKILL");
+      return;
+    }
+  } catch {
+    // Bootstrap can exit before setsid(). Fall through to the direct child;
+    // no caller code is accepted if the harness cannot establish the session.
+  }
+  try {
+    child.kill("SIGKILL");
+  } catch {
+    // The process can naturally exit at a timeout or output-limit boundary.
+  }
+}
+
 /**
  * Run a build123d script through the harness.
  *
@@ -105,6 +155,7 @@ export async function runCadScript(
     timeoutMs?: number;
   },
 ): Promise<HarnessResult> {
+  assertScriptWithinLimit(script);
   const timeoutMs = options?.timeoutMs ?? 60_000;
   const interpreter = pythonBin();
 
@@ -114,7 +165,7 @@ export async function runCadScript(
       // A JSR module's `import.meta.url` is an HTTPS URL, not a local path.
       // The generated TS module carries the harness source in the package
       // graph, so `-c` never needs to know Deno's cache-file location.
-      args: ["-c", HARNESS_SOURCE],
+      args: ["-I", "-B", "-c", HARNESS_SOURCE],
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
@@ -135,14 +186,38 @@ export async function runCadScript(
   await writer.write(new TextEncoder().encode(request));
   await writer.close();
 
+  let timedOut = false;
   const timer = setTimeout(() => {
-    try {
-      child.kill("SIGKILL");
-    } catch { /* already exited */ }
+    timedOut = true;
+    killExecutionTree(child);
   }, timeoutMs);
 
-  const { stdout, stderr, success } = await child.output();
-  clearTimeout(timer);
+  let processResult;
+  try {
+    processResult = await collectBoundedChildOutput(child, {
+      maximumStdoutBytes: BUILD123D_MAXIMUM_HARNESS_STDOUT_BYTES,
+      maximumStderrBytes: BUILD123D_MAXIMUM_HARNESS_STDERR_BYTES,
+      terminate: () => killExecutionTree(child),
+    });
+  } catch (error) {
+    if (error instanceof ProcessOutputLimitError) {
+      throw new CadExecutionLimitError(
+        error.stream,
+        `CAD execution ${error.stream} exceeded its fixed server budget.`,
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (timedOut) {
+    throw new CadExecutionLimitError(
+      "timeout",
+      `CAD execution exceeded the ${timeoutMs}ms limit.`,
+    );
+  }
+
+  const { stdout, stderr, success } = processResult;
 
   const stdoutText = new TextDecoder().decode(stdout);
 

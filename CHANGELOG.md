@@ -2,6 +2,27 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [0.6.0] - 2026-08-29
+
+- **Bounded provider execution.** Scripts, bridge stdout/stderr, individual
+  promoted exports, and retained current-process artifact storage now have fixed
+  byte budgets. Limit exhaustion is a stable non-retryable tool recovery; it
+  never relies on unbounded `ChildProcess.output()` buffering.
+- **Timeout tree cleanup.** The private Python harness creates a POSIX process
+  group before user code runs. A timeout or output-budget breach kills that
+  group, and adversarial coverage verifies a normal spawned descendant cannot
+  outlive its timed-out parent.
+- **Qualified runtime, fail closed.** Startup verifies the exact
+  `build123d==0.11.1` / `cadquery-ocp-novtk==7.9.3.1.1` pair, including the
+  expected Python binding identity `OCP.__version__ == "7.9.3.1"`. CI and the
+  dedicated image share committed constraints instead of resolver-selected OCP.
+- **Dedicated published image.** GHCR builds the exact Deno 2.9.6 base for
+  linux/amd64 and linux/arm64 with OCI source/version/revision labels, SBOM and
+  provenance. The workflow smokes HTTP, stdio, and a real OCCT calculation
+  before publication.
+- **Pinned server framework.** The JSR framework dependency is exact in the
+  import map and covered by the committed lockfile.
+
 ## [0.5.1] - 2026-08-28
 
 - **Fixed STEP-only assembly observation.**

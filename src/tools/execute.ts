@@ -21,6 +21,7 @@ import {
   type PublishedCadExportFile,
 } from "../artifacts.ts";
 import {
+  BUILD123D_MAXIMUM_SCRIPT_BYTES,
   type CadExportFile,
   type CadMetrics,
   type ExportSpec,
@@ -282,6 +283,7 @@ export function createExecuteTools(
           script: {
             type: "string",
             minLength: 1,
+            maxLength: BUILD123D_MAXIMUM_SCRIPT_BYTES,
             description: SCRIPT_DESCRIPTION,
           },
           density_kg_m3: {
@@ -338,6 +340,7 @@ export function createExecuteTools(
           script: {
             type: "string",
             minLength: 1,
+            maxLength: BUILD123D_MAXIMUM_SCRIPT_BYTES,
             description: SCRIPT_DESCRIPTION,
           },
           formats: {

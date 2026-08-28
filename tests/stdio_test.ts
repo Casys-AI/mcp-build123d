@@ -83,12 +83,19 @@ async function createFakeCadInterpreter(root: string): Promise<string> {
     harness,
     `
 const fixture = new Uint8Array(${JSON.stringify(Array.from(FIXTURE_GLB))});
-if (
-  Deno.args[0] === "-c" &&
-  Deno.args[1]?.includes("import os, stat, sys\\n")
-) {
+const sourceIndex = Deno.args.indexOf("-c");
+const source = sourceIndex >= 0 ? Deno.args[sourceIndex + 1] : undefined;
+if (source?.includes("cadqueryOcp")) {
+  console.log(JSON.stringify({
+    ok: true,
+    build123d: "0.11.1",
+    cadqueryOcp: "7.9.3.1",
+  }));
+  Deno.exit(0);
+}
+if (source?.includes("import os, stat, sys\\n")) {
   await Deno.stdout.write(
-    await Deno.readFile(Deno.args[2] + "/" + Deno.args[3]),
+    await Deno.readFile(Deno.args[sourceIndex + 2] + "/" + Deno.args[sourceIndex + 3]),
   );
   Deno.exit(0);
 }
@@ -249,6 +256,7 @@ Deno.test("server.ts --stdio ignores a preseeded digest object and forged receip
   const artifacts = `${root}/artifacts`;
   const exports = `${root}/delivery`;
   await Deno.mkdir(exports);
+  const interpreter = await createFakeCadInterpreter(root);
   await Deno.mkdir(artifacts);
   const sha256 = await sha256Hex(FIXTURE_GLB);
   const uri = `casys://build123d/artifacts/${sha256}.glb`;
@@ -282,6 +290,7 @@ Deno.test("server.ts --stdio ignores a preseeded digest object and forged receip
     args: ["run", "--allow-all", "--no-check", SERVER, "--stdio"],
     env: {
       ...Deno.env.toObject(),
+      BUILD123D_PYTHON_BIN: interpreter,
       BUILD123D_ARTIFACT_DIR: artifacts,
       BUILD123D_EXPORT_DIR: exports,
     },

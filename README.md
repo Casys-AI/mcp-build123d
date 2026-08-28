@@ -60,18 +60,20 @@ tessellation.
 
 ### Run a source checkout
 
-Requirements are Deno 2.x and Python 3.10+ with build123d. Immutable export
-promotion uses POSIX directory-descriptor safeguards, so this release supports
-that promotion on macOS and Linux; an unsupported host refuses promotion rather
-than weakening containment. A virtual environment keeps the OCCT dependency
-isolated from the system Python:
+Requirements are Deno 2.9.6 and Python 3.10+. The provider qualifies the exact
+`build123d==0.11.1` / `cadquery-ocp-novtk==7.9.3.1.1` pair (reported by Python
+as `OCP.__version__ == "7.9.3.1"`). Immutable export promotion uses POSIX
+directory-descriptor safeguards, so this release supports that promotion on
+macOS and Linux; an unsupported host refuses promotion rather than weakening
+containment. A virtual environment keeps the OCCT dependency isolated from the
+system Python:
 
 ```bash
 git clone https://github.com/Casys-AI/mcp-build123d.git
 cd mcp-build123d
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install build123d==0.11.1
+python -m pip install -r requirements/runtime.txt -c requirements/constraints.txt
 BUILD123D_PYTHON_BIN="$PWD/.venv/bin/python" deno task serve
 ```
 
@@ -109,12 +111,12 @@ For example, a checkout-backed stdio entry is:
 
 ### Run the published package
 
-The published JSR package `0.5.1` can be started directly; Python and build123d
+The published JSR package `0.6.0` can be started directly; Python and build123d
 are still host dependencies:
 
 ```bash
 BUILD123D_PYTHON_BIN="$PWD/.venv/bin/python" \
-  deno run -A jsr:@casys/mcp-build123d@0.5.1/server --port=3014
+  deno run -A jsr:@casys/mcp-build123d@0.6.0/server --port=3014
 ```
 
 `-A` is intentional here: the public tools run arbitrary Python and write
@@ -136,56 +138,32 @@ file location depends on the host; the connection entry is typically:
 ```
 
 HTTP binds to `127.0.0.1` by default; `--hostname=0.0.0.0` is an explicit
-network exposure. The `0.5.1` checkout supports native stdio and the
+network exposure. The `0.6.0` checkout supports native stdio and the
 digest-bound resource contract described below.
 
-### Run the published engineering toolchain image
+### Run the published provider image
 
-This repository does not publish a dedicated `mcp-build123d` image. Casys does
-publish the historical `0.4.1` server in the broader
-[`engineering-toolchain`](https://github.com/Casys-AI/engineering-toolchain)
-image, with Python, build123d 0.11.1, and OCCT already installed. It remains a
-way to run the published HTTP server; it does not yet include this checkout's
-native stdio or immutable artifact-resource behavior. Start its `build123d`
-entrypoint directly while keeping the historical exports on the host:
+The dedicated image includes the qualified Python/CAD pair and Deno runtime. Use
+the immutable digest published for this release (the repository README is pinned
+after image publication); do not substitute the historical broader
+`engineering-toolchain` image, which is a different server release.
 
 ```bash
 mkdir -p "$PWD/cad-exports"
 docker run --rm \
   --publish 127.0.0.1:3014:3014 \
   --volume "$PWD/cad-exports:/exports" \
-  ghcr.io/casys-ai/engineering-toolchain:0.4.1 \
-  build123d --port=3014 --hostname=0.0.0.0
+  ghcr.io/casys-ai/mcp-build123d:0.6.0
 ```
 
 ### Build a checkout locally
 
-For a dedicated local image built from this checkout, save the following as
-`Dockerfile.local`. It keeps Python, the resolver-selected OCCT dependency,
-Deno, and exports together:
-
-```dockerfile
-FROM denoland/deno:debian-2.9.2
-USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgl1 python3 python3-venv \
-    && rm -rf /var/lib/apt/lists/* \
-    && python3 -m venv /opt/build123d \
-    && /opt/build123d/bin/pip install --no-cache-dir build123d==0.11.1
-WORKDIR /app
-COPY . .
-RUN deno cache --frozen server.ts \
-    && mkdir -p /exports \
-    && chown -R deno:deno /app /exports
-ENV BUILD123D_PYTHON_BIN=/opt/build123d/bin/python
-ENV BUILD123D_EXPORT_DIR=/exports
-USER deno
-EXPOSE 3014
-CMD ["deno", "run", "-A", "server.ts", "--hostname=0.0.0.0", "--port=3014"]
-```
+For a dedicated local image built from this checkout, use the committed
+[`Dockerfile`](Dockerfile). It applies the same exact constraints and Deno base
+image as CI and the published image:
 
 ```bash
-docker build -f Dockerfile.local -t mcp-build123d:local .
+docker build -t mcp-build123d:local .
 mkdir -p cad-exports
 docker run --rm \
   --publish 127.0.0.1:3014:3014 \
@@ -212,6 +190,12 @@ Consequences:
 - Promotion reads delivery bytes through a short-lived isolated reader with a
   fixed five-second deadline. A special file or post-check staging swap fails
   closed; it cannot indefinitely block artifact issuance.
+- Inputs, bridge stdout/stderr, each promoted export, and retained
+  current-process artifacts have fixed server-side byte budgets. Exceeding one
+  returns a stable non-retryable resource-limit recovery rather than retaining
+  unbounded bytes. The bridge kills its POSIX process group on timeout or output
+  overflow; this covers normal descendants, not a hostile process that escapes
+  the group or a security sandbox.
 - Loopback binding, safe export names, content-addressed resources, and timeouts
   are useful controls; none of them isolates the Python process. Put untrusted
   code behind a real sandbox with no secrets, network, or sensitive mounts.
@@ -457,7 +441,7 @@ exact input identity, fixed method, and a closed producer block:
 {
   "producer": {
     "service": "mcp-build123d",
-    "packageVersion": "0.5.1",
+    "packageVersion": "0.6.0",
     "tool": "build123d_observe_assembly_integrity",
     "engine": { "name": "cadquery-ocp", "version": "7.9.3.1" }
   }
@@ -499,12 +483,10 @@ attestation; the fixed method still describes the OCCT/XCAF observation.
   artifact URI again.
 - `build123d_export` passes the UTC sentinel `1970-01-01T00:00:00Z` to
   build123d's native STEP `timestamp` parameter. That sentinel is a
-  reproducibility marker, not the execution or export time. This checkout pins
-  `build123d==0.11.1`, while its `cadquery-ocp-novtk` dependency is
-  resolver-selected within build123d's `>=7.9,<8` range. The exact resolved
-  OCP/OCCT binding is invocation-specific, so byte-for-byte STEP identity is
-  scoped to the actual resolved execution environment; other resolutions or
-  exporter versions may change bytes.
+  reproducibility marker, not the execution or export time. This provider starts
+  only with the qualified `build123d==0.11.1` and
+  `cadquery-ocp-novtk==7.9.3.1.1` pair. Its observed `OCP.__version__` is
+  `7.9.3.1`; other provider releases may change bytes.
 - Digest equality proves byte equality, not geometric equivalence. Export bytes
   can change across build123d, OCCT, or exporter versions even when a shape is
   visually equivalent.

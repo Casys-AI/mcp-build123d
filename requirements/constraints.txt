@@ -1,0 +1,4 @@
+# Published provider runtime qualification. Keep this pair exact: the Python
+# binding reports OCP.__version__ as 7.9.3.1 for this package build.
+build123d==0.11.1
+cadquery-ocp-novtk==7.9.3.1.1
