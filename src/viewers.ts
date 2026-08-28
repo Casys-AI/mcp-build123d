@@ -9,7 +9,7 @@
 import type { McpApp } from "@casys/mcp-server";
 
 const MODULE_URL = new URL("..", import.meta.url).href;
-const VIEWERS = ["results-viewer", "artifact-helper-viewer"];
+const VIEWERS = ["results-viewer"];
 
 function isRemoteUrl(path: string): boolean {
   return path.startsWith("https://") || path.startsWith("http://");

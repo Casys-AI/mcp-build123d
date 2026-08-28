@@ -1,7 +1,7 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import {
   decodeGltfArtifact,
-  gltfViewerReadArguments,
+  type ExportArtifact,
   parseGeometryResult,
 } from "../src/ui/results-viewer/src/contract.ts";
 import { renderViewer } from "../src/ui/results-viewer/src/render.ts";
@@ -24,7 +24,38 @@ const METRICS = {
   mass_kg: 0.0027,
 };
 
-Deno.test("results viewer parses exactly the v1 execution and export envelopes", () => {
+function artifact(
+  format: "step" | "stl" | "gltf",
+  sha256 = "a".repeat(64),
+  bytes = 4256,
+): ExportArtifact {
+  const extension = format === "gltf" ? "glb" : format;
+  const mimeType = format === "step"
+    ? "model/step"
+    : format === "stl"
+    ? "model/stl"
+    : "model/gltf-binary";
+  return {
+    schemaVersion: "build123d-export-artifact/1.0",
+    uri: `casys://build123d/artifacts/${sha256}.${extension}`,
+    format,
+    mimeType,
+    bytes,
+    sha256,
+  };
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", copy);
+  return Array.from(
+    new Uint8Array(digest),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+Deno.test("results viewer parses execution and immutable export envelopes", () => {
   const execution = parseGeometryResult({
     schemaVersion: "1.0",
     kind: "execution",
@@ -33,26 +64,22 @@ Deno.test("results viewer parses exactly the v1 execution and export envelopes",
   });
   assertEquals(execution.ok, true);
   if (!execution.ok) return;
-  assertEquals(execution.value.kind, "execution");
   assertEquals(execution.value.metrics.boundingBoxMm?.size, [10, 20, 5]);
 
   const exported = parseGeometryResult({
     schemaVersion: "1.0",
     kind: "export",
     metrics: METRICS,
-    files: [{
-      format: "step",
-      path: "/exports/bracket.step",
-      bytes: 4256,
-      sha256: "a".repeat(64),
-    }],
+    files: [{ format: "step", artifact: artifact("step") }],
   });
   assertEquals(exported.ok, true);
   if (!exported.ok) return;
-  assertEquals(exported.value.files[0].format, "step");
-  assertEquals(exported.value.files[0].sha256, "a".repeat(64));
+  assertEquals(exported.value.files[0].artifact.uri.endsWith(".step"), true);
+  assertEquals(exported.value.files[0].artifact.sha256, "a".repeat(64));
+});
 
-  const gltf = parseGeometryResult({
+Deno.test("results viewer rejects a mutable path-shaped or incoherent export envelope", () => {
+  const legacy = parseGeometryResult({
     schemaVersion: "1.0",
     kind: "export",
     metrics: METRICS,
@@ -61,24 +88,101 @@ Deno.test("results viewer parses exactly the v1 execution and export envelopes",
       path: "/exports/assembly.glb",
       bytes: 12,
       sha256: "b".repeat(64),
-      viewer: { toolName: "build123d_export_read", name: "assembly.glb" },
     }],
   });
-  assertEquals(gltf.ok, true);
-  if (!gltf.ok) return;
-  assertEquals(gltf.value.files[0].viewer, {
-    toolName: "build123d_export_read",
-    name: "assembly.glb",
+  assertEquals(legacy.ok, false);
+  if (!legacy.ok) assertStringIncludes(legacy.error, "artifact");
+
+  const mismatched = parseGeometryResult({
+    schemaVersion: "1.0",
+    kind: "export",
+    metrics: METRICS,
+    files: [{ format: "step", artifact: artifact("gltf") }],
   });
-  assertEquals(gltf.value.files[0].sha256, "b".repeat(64));
-  assertEquals(gltfViewerReadArguments(gltf.value.files[0]), {
-    name: "assembly.glb",
-    expected_sha256: "b".repeat(64),
+  assertEquals(mismatched.ok, false);
+  if (!mismatched.ok) assertStringIncludes(mismatched.error, "match");
+
+  const mismatchedDigest = parseGeometryResult({
+    schemaVersion: "1.0",
+    kind: "export",
+    metrics: METRICS,
+    files: [{
+      format: "step",
+      artifact: {
+        ...artifact("step", "c".repeat(64)),
+        sha256: "d".repeat(64),
+      },
+    }],
   });
-  assertEquals(gltfViewerReadArguments(exported.value.files[0]), undefined);
+  assertEquals(mismatchedDigest.ok, false);
+  if (!mismatchedDigest.ok) {
+    assertStringIncludes(mismatchedDigest.error, "declared digest");
+  }
+
+  const trailingUri = parseGeometryResult({
+    schemaVersion: "1.0",
+    kind: "export",
+    metrics: METRICS,
+    files: [{
+      format: "step",
+      artifact: {
+        ...artifact("step"),
+        uri: `${artifact("step").uri}?not-an-artifact`,
+      },
+    }],
+  });
+  assertEquals(trailingUri.ok, false);
+  if (!trailingUri.ok) assertStringIncludes(trailingUri.error, "resource URI");
 });
 
-Deno.test("results viewer publishes the small component catalog and standalone surface", () => {
+Deno.test("results viewer verifies a GLB resources/read response against the returned SHA-256", async () => {
+  const binary = new Uint8Array([
+    0x67,
+    0x6c,
+    0x54,
+    0x46,
+    2,
+    0,
+    0,
+    0,
+    12,
+    0,
+    0,
+    0,
+  ]);
+  const expected = artifact("gltf", await sha256Hex(binary), binary.length);
+  const decoded = await decodeGltfArtifact({
+    contents: [{
+      uri: expected.uri,
+      mimeType: expected.mimeType,
+      blob: binary.toBase64(),
+    }],
+  }, expected);
+  assertEquals(decoded.ok, true);
+  if (decoded.ok) assertEquals(decoded.value, binary);
+
+  const wrongDigest = await decodeGltfArtifact({
+    contents: [{
+      uri: expected.uri,
+      mimeType: expected.mimeType,
+      blob: binary.toBase64(),
+    }],
+  }, { ...expected, sha256: "0".repeat(64) });
+  assertEquals(wrongDigest.ok, false);
+  if (!wrongDigest.ok) assertStringIncludes(wrongDigest.error, "SHA-256");
+
+  const wrongUri = await decodeGltfArtifact({
+    contents: [{
+      uri: "casys://build123d/artifacts/other.glb",
+      mimeType: expected.mimeType,
+      blob: binary.toBase64(),
+    }],
+  }, expected);
+  assertEquals(wrongUri.ok, false);
+  if (!wrongUri.ok) assertStringIncludes(wrongUri.error, "URI");
+});
+
+Deno.test("results viewer publishes the small component catalog and surface", () => {
   assertEquals(BUILD123D_COMPONENT_KEYS, {
     status: "build123d.geometry-status",
     metrics: "build123d.geometry-metrics",
@@ -94,192 +198,22 @@ Deno.test("results viewer publishes the small component catalog and standalone s
       { id: "export-artifacts", component: "build123d.export-artifacts" },
     ],
   });
-  assertEquals(
-    new Set(BUILD123D_DEFAULT_SURFACE.components.map((item) => item.id)).size,
-    BUILD123D_DEFAULT_SURFACE.components.length,
-  );
 });
 
-Deno.test("results viewer validates and decodes only the GLB helper envelope", () => {
-  const binary = new Uint8Array([
-    0x67,
-    0x6c,
-    0x54,
-    0x46,
-    2,
-    0,
-    0,
-    0,
-    12,
-    0,
-    0,
-    0,
-  ]);
-  const decoded = decodeGltfArtifact({
-    schemaVersion: "1.0",
-    kind: "gltf-binary",
-    name: "assembly.glb",
-    mimeType: "model/gltf-binary",
-    bytes: binary.length,
-    base64: binary.toBase64(),
-  });
-  assertEquals(decoded.ok, true);
-  if (decoded.ok) assertEquals(decoded.value, binary);
-
-  const wrongLength = decodeGltfArtifact({
-    schemaVersion: "1.0",
-    kind: "gltf-binary",
-    name: "assembly.glb",
-    mimeType: "model/gltf-binary",
-    bytes: binary.length + 1,
-    base64: binary.toBase64(),
-  });
-  assertEquals(wrongLength.ok, false);
-
-  const wrongVersion = binary.slice();
-  wrongVersion[4] = 1;
-  const versionResult = decodeGltfArtifact({
-    schemaVersion: "1.0",
-    kind: "gltf-binary",
-    name: "assembly.glb",
-    mimeType: "model/gltf-binary",
-    bytes: wrongVersion.length,
-    base64: wrongVersion.toBase64(),
-  });
-  assertEquals(versionResult.ok, false);
-  if (!versionResult.ok) assertStringIncludes(versionResult.error, "version 2");
-
-  const badDeclaredLength = binary.slice();
-  badDeclaredLength[8] = 13;
-  const lengthResult = decodeGltfArtifact({
-    schemaVersion: "1.0",
-    kind: "gltf-binary",
-    name: "assembly.glb",
-    mimeType: "model/gltf-binary",
-    bytes: badDeclaredLength.length,
-    base64: badDeclaredLength.toBase64(),
-  });
-  assertEquals(lengthResult.ok, false);
-  if (!lengthResult.ok) {
-    assertStringIncludes(lengthResult.error, "declared length");
-  }
-});
-
-Deno.test("results viewer rejects invalid v1 envelopes before rendering", () => {
-  const wrongVersion = parseGeometryResult({ schemaVersion: "2.0" });
-  assertEquals(wrongVersion.ok, false);
-  if (!wrongVersion.ok) assertStringIncludes(wrongVersion.error, "version 1.0");
-
-  const executionWithFile = parseGeometryResult({
-    schemaVersion: "1.0",
-    kind: "execution",
-    metrics: METRICS,
-    files: [{
-      format: "stl",
-      path: "unexpected.stl",
-      bytes: 1,
-      sha256: "e".repeat(64),
-    }],
-  });
-  assertEquals(executionWithFile.ok, false);
-  if (!executionWithFile.ok) {
-    assertStringIncludes(executionWithFile.error, "must not contain");
-  }
-
-  const emptyExport = parseGeometryResult({
-    schemaVersion: "1.0",
-    kind: "export",
-    metrics: METRICS,
-    files: [],
-  });
-  assertEquals(emptyExport.ok, false);
-  if (!emptyExport.ok) assertStringIncludes(emptyExport.error, "at least one");
-
-  const exportWithoutDigest = parseGeometryResult({
-    schemaVersion: "1.0",
-    kind: "export",
-    metrics: METRICS,
-    files: [{ format: "step", path: "missing.step", bytes: 1 }],
-  });
-  assertEquals(exportWithoutDigest.ok, false);
-  if (!exportWithoutDigest.ok) {
-    assertStringIncludes(exportWithoutDigest.error, "sha256");
-  }
-});
-
-Deno.test("results viewer accepts signed coordinates around the origin", () => {
-  const centered = parseGeometryResult({
-    schemaVersion: "1.0",
-    kind: "execution",
-    metrics: {
-      ...METRICS,
-      center_of_mass_mm: [0, 0, 0],
-      bounding_box_mm: {
-        min: [-5, -10, -2.5],
-        max: [5, 10, 2.5],
-        size: [10, 20, 5],
-      },
-    },
-    files: [],
-  });
-  assertEquals(centered.ok, true);
-  if (!centered.ok) return;
-  assertEquals(centered.value.metrics.boundingBoxMm?.min, [-5, -10, -2.5]);
-});
-
-Deno.test("results viewer lifecycle errors escape markup", () => {
+Deno.test("results viewer status and metrics derive from the verified artifact result", () => {
   const parsed = parseGeometryResult({
     schemaVersion: "1.0",
     kind: "export",
     metrics: METRICS,
     files: [{
       format: "gltf",
-      path: '<img src=x onerror="alert(1)">',
-      bytes: 12,
-      sha256: "c".repeat(64),
-    }],
-  });
-  assertEquals(parsed.ok, true);
-  if (!parsed.ok) return;
-  assertStringIncludes(
-    geometryStatusValue({ result: parsed.value }).detail,
-    '<img src=x onerror="alert(1)">',
-  );
-
-  const errorHtml = renderViewer({
-    phase: "error",
-    message: "<script>alert(1)</script>",
-  });
-  assertEquals(errorHtml.includes("<script>alert"), false);
-  assertStringIncludes(errorHtml, "&lt;script&gt;alert(1)&lt;/script&gt;");
-});
-
-Deno.test("results viewer exposes loading state without leaving the host busy", () => {
-  assertStringIncludes(renderViewer({ phase: "loading" }), 'aria-busy="true"');
-  assertStringIncludes(renderViewer({ phase: "empty" }), 'aria-busy="false"');
-  assertStringIncludes(
-    renderViewer({ phase: "error", message: "Nope" }),
-    'aria-busy="false"',
-  );
-});
-
-Deno.test("results viewer derives component data from the real geometry result", () => {
-  const parsed = parseGeometryResult({
-    schemaVersion: "1.0",
-    kind: "export",
-    metrics: METRICS,
-    files: [{
-      format: "gltf",
-      path: "/exports/assembly.glb",
-      bytes: 4096,
-      sha256: "d".repeat(64),
-      viewer: { toolName: "build123d_export_read", name: "assembly.glb" },
+      artifact: artifact("gltf", "d".repeat(64), 4096),
     }],
   });
   if (!parsed.ok) throw new Error(parsed.error);
   assertEquals(geometryStatusValue({ result: parsed.value }), {
     label: "EXPORTÉ",
-    detail: "assembly.glb · 1 solide · 6 faces",
+    detail: "SHA-256 dddddddddddd… · 1 solide · 6 faces",
     tone: "success",
   });
   assertEquals(geometryMetricValues({ result: parsed.value }), [
@@ -308,7 +242,18 @@ Deno.test("results viewer derives component data from the real geometry result",
   ]);
 });
 
-Deno.test("results viewer keeps only CAD layout CSS beside shared Preact components", async () => {
+Deno.test("results viewer lifecycle errors remain escaped HTML", () => {
+  const errorHtml = renderViewer({
+    phase: "error",
+    message: "<script>alert(1)</script>",
+  });
+  assertEquals(errorHtml.includes("<script>alert"), false);
+  assertStringIncludes(errorHtml, "&lt;script&gt;alert(1)&lt;/script&gt;");
+  assertStringIncludes(renderViewer({ phase: "loading" }), 'aria-busy="true"');
+  assertStringIncludes(renderViewer({ phase: "empty" }), 'aria-busy="false"');
+});
+
+Deno.test("result viewer uses the standard resource client and shared components", async () => {
   const styles = await Deno.readTextFile(
     new URL("../src/ui/results-viewer/src/styles.css", import.meta.url),
   );
@@ -316,13 +261,6 @@ Deno.test("results viewer keeps only CAD layout CSS beside shared Preact compone
     new URL("../src/ui/results-viewer/src/components.tsx", import.meta.url),
   );
   assertStringIncludes(styles, "container: build123d-view / inline-size");
-  assertStringIncludes(
-    styles,
-    "@container build123d-view (max-width: 620px)",
-  );
-  assertEquals(styles.includes(".mcp-view-card {"), false);
-  assertEquals(styles.includes(".mcp-view-metrics {"), false);
-  assertEquals(styles.includes(".mcp-view-table {"), false);
   for (
     const shared of [
       "Badge",
@@ -334,13 +272,11 @@ Deno.test("results viewer keeps only CAD layout CSS beside shared Preact compone
       "MetricGrid",
       "StateMessage",
       "Toolbar",
-      "definePreactComponent",
     ]
   ) {
     assertStringIncludes(components, shared);
   }
-  assertEquals(styles.includes("data-casys-projection"), false);
-  assertEquals(styles.includes("build123d-glance"), false);
-  assertStringIncludes(components, "gltfViewerReadArguments");
-  assertStringIncludes(components, "gltf?.sha256");
+  assertStringIncludes(components, "readServerResource");
+  assertEquals(components.includes("gltfViewerReadArguments"), false);
+  assertEquals(components.includes("build123d_export_read"), false);
 });

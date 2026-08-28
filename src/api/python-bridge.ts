@@ -31,6 +31,14 @@ export class CadExecutionError extends Error {
   }
 }
 
+/** Raised when the selected interpreter cannot import build123d. */
+export class Build123dUnavailableError extends CadExecutionError {
+  constructor(message: string, pythonTraceback?: string) {
+    super(message, pythonTraceback);
+    this.name = "Build123dUnavailableError";
+  }
+}
+
 export interface ExportSpec {
   format: "step" | "stl" | "gltf";
   path: string;
@@ -85,8 +93,9 @@ function pythonBin(): string {
  * Run a build123d script through the harness.
  *
  * @throws PythonNotFoundError when the interpreter is missing
- * @throws CadExecutionError on any harness-reported failure — script errors,
- *         missing `result` variable, export failures, missing build123d
+ * @throws Build123dUnavailableError when the selected interpreter lacks build123d
+ * @throws CadExecutionError on other harness-reported failures — script errors,
+ *         missing `result` variable or export failures
  */
 export async function runCadScript(
   script: string,
@@ -157,10 +166,18 @@ export async function runCadScript(
   }
 
   if (!response.ok) {
-    throw new CadExecutionError(
-      response.error ?? "Unknown harness failure",
-      response.traceback ?? undefined,
-    );
+    const message = response.error ?? "Unknown harness failure";
+    if (
+      message.startsWith(
+        "build123d is not installed for this Python interpreter.",
+      )
+    ) {
+      throw new Build123dUnavailableError(
+        message,
+        response.traceback ?? undefined,
+      );
+    }
+    throw new CadExecutionError(message, response.traceback ?? undefined);
   }
 
   if (!response.metrics) {

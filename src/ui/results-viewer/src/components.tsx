@@ -17,11 +17,7 @@ import {
   Toolbar,
 } from "@casys/mcp-view/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import {
-  decodeGltfArtifact,
-  type ExportFile,
-  gltfViewerReadArguments,
-} from "./contract.ts";
+import { decodeGltfArtifact, type ExportFile } from "./contract.ts";
 import {
   BUILD123D_COMPONENT_KEYS,
   BUILD123D_DEFAULT_SURFACE,
@@ -75,14 +71,11 @@ const GeometryCanvas = ({ data, context }: Props) => {
   const controller = useRef<CadSceneController>();
   const [wireframe, setWireframe] = useState(false);
   const [phase, setPhase] = useState<CanvasPhase>(() =>
-    gltf?.viewer
-      ? { kind: "loading", detail: "Loading the local GLB artifact…" }
-      : {
-        kind: "empty",
-        detail: gltf
-          ? "This GLB export does not provide a bounded viewer reference."
-          : "Add the gltf format to build123d_export to mount the 3D component.",
-      }
+    gltf ? { kind: "loading", detail: "Loading the verified GLB resource…" } : {
+      kind: "empty",
+      detail:
+        "Add the gltf format to build123d_export to mount the 3D component.",
+    }
   );
 
   useEffect(() => {
@@ -91,40 +84,25 @@ const GeometryCanvas = ({ data, context }: Props) => {
     controller.current = undefined;
     setWireframe(false);
 
-    const viewer = gltf?.viewer;
-    if (!target || !gltf || !viewer) {
+    if (!target || !gltf) {
       setPhase({
         kind: "empty",
-        detail: gltf
-          ? "This GLB export does not provide a bounded viewer reference."
-          : "Add the gltf format to build123d_export to mount the 3D component.",
+        detail:
+          "Add the gltf format to build123d_export to mount the 3D component.",
       });
       return;
     }
 
     let cancelled = false;
     let mounted: CadSceneController | undefined;
-    setPhase({ kind: "loading", detail: "Loading the local GLB artifact…" });
+    setPhase({ kind: "loading", detail: "Loading the verified GLB resource…" });
 
     void (async () => {
       try {
-        const read = gltfViewerReadArguments(gltf);
-        if (!read) {
-          throw new Error(
-            "This GLB export does not provide a bounded viewer reference.",
-          );
-        }
-        const artifact = await context.callTool(viewer.toolName, {
-          name: read.name,
-          expected_sha256: read.expected_sha256,
+        const resource = await context.app.readServerResource({
+          uri: gltf.artifact.uri,
         });
-        if (artifact.isError) {
-          throw new Error(
-            mcpErrorText(artifact.content) ??
-              "The server rejected the local GLB artifact.",
-          );
-        }
-        const decoded = decodeGltfArtifact(artifact.structuredContent);
+        const decoded = await decodeGltfArtifact(resource, gltf.artifact);
         if (!decoded.ok) throw new Error(decoded.error);
         if (cancelled) return;
         mounted = await mountCadScene(target, decoded.value);
@@ -156,10 +134,9 @@ const GeometryCanvas = ({ data, context }: Props) => {
     };
   }, [
     context,
-    gltf?.path,
-    gltf?.sha256,
-    gltf?.viewer?.name,
-    gltf?.viewer?.toolName,
+    gltf?.artifact.bytes,
+    gltf?.artifact.sha256,
+    gltf?.artifact.uri,
   ]);
 
   const controls = (
@@ -208,7 +185,7 @@ const GeometryCanvas = ({ data, context }: Props) => {
         <div class="cad-reticle" aria-hidden="true" />
         {phase.kind === "ready" && (
           <div class="cad-hud" aria-live="polite">
-            <Badge tone="success">Local GLB</Badge>
+            <Badge tone="success">Verified GLB</Badge>
             <span>
               {phase.meshes} mesh{phase.meshes === 1 ? "" : "es"} ·{" "}
               {phase.nodes} nodes
@@ -236,8 +213,8 @@ const GeometryCanvas = ({ data, context }: Props) => {
       </div>
       <footer class="model-foot">
         <span>Orbit · Pan · Zoom</span>
-        <code>{gltf?.path ?? "No GLB artifact"}</code>
-        <span>{gltf ? formatBytes(gltf.bytes) : "—"}</span>
+        <code>{gltf?.artifact.uri ?? "No GLB artifact"}</code>
+        <span>{gltf ? formatBytes(gltf.artifact.bytes) : "—"}</span>
       </footer>
     </Card>
   );
@@ -250,27 +227,32 @@ const artifactColumns: readonly DataTableColumn<ExportFile>[] = [
     render: (file) => <Badge tone="info">{file.format.toUpperCase()}</Badge>,
   },
   {
-    id: "path",
-    label: "Path",
-    render: (file) => <code>{file.path}</code>,
+    id: "resource",
+    label: "Resource",
+    render: (file) => <code>{file.artifact.uri}</code>,
+  },
+  {
+    id: "sha256",
+    label: "SHA-256",
+    render: (file) => <code>{file.artifact.sha256}</code>,
   },
   {
     id: "bytes",
     label: "Size",
     align: "right",
-    render: (file) => formatBytes(file.bytes),
+    render: (file) => formatBytes(file.artifact.bytes),
   },
 ];
 
 const ExportArtifacts = ({ data }: Props) => (
-  <Card title="Export artifacts" eyebrow="Generated files">
+  <Card title="Export artifacts" eyebrow="Immutable resources">
     {data.result.files.length > 0
       ? (
         <DataTable
-          label="Generated build123d artifacts"
+          label="Immutable build123d export artifacts"
           rows={data.result.files}
           columns={artifactColumns}
-          rowKey={(file) => `${file.format}:${file.path}`}
+          rowKey={(file) => `${file.format}:${file.artifact.sha256}`}
         />
       )
       : (
@@ -307,14 +289,14 @@ export const BUILD123D_COMPONENT_REGISTRY = defineComponentRegistry<
       {
         title: "Interactive geometry",
         description:
-          "Interactive local GLB canvas with orbit, pan and inspection.",
+          "Interactive verified GLB resource canvas with orbit, pan and inspection.",
       },
       GeometryCanvas,
     ),
     [BUILD123D_COMPONENT_KEYS.artifacts]: definePreactComponent(
       {
         title: "Export artifacts",
-        description: "Exact generated formats, paths and byte sizes.",
+        description: "Immutable export resource URIs, digests and byte sizes.",
       },
       ExportArtifacts,
     ),
@@ -326,16 +308,4 @@ function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function mcpErrorText(content: unknown): string | undefined {
-  if (!Array.isArray(content)) return undefined;
-  const messages = content.flatMap((entry) => {
-    if (entry === null || typeof entry !== "object") return [];
-    const block = entry as Record<string, unknown>;
-    return block.type === "text" && typeof block.text === "string"
-      ? [block.text]
-      : [];
-  });
-  return messages.length > 0 ? messages.join("\n") : undefined;
 }

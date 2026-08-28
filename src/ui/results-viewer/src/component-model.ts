@@ -40,13 +40,13 @@ export function geometryStatusValue(
   data: GeometryComponentData,
 ): GeometryStatusValue {
   const result = data.result;
-  const identity = result.files[0]?.path.split(/[/\\]/).pop();
+  const identity = result.files[0]?.artifact.sha256.slice(0, 12);
   const topology = `${result.metrics.solids} solide${
     result.metrics.solids === 1 ? "" : "s"
   } · ${result.metrics.faces} faces`;
   return {
     label: result.kind === "export" ? "EXPORTÉ" : "CALCULÉ",
-    detail: identity ? `${identity} · ${topology}` : topology,
+    detail: identity ? `SHA-256 ${identity}… · ${topology}` : topology,
     tone: "success",
   };
 }

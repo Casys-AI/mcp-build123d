@@ -9,13 +9,19 @@
 
 import {
   allTools,
+  createCadToolCatalogue,
   getCategories,
   getToolByName,
   getToolsByCategory,
   toolsByCategory,
 } from "./tools/mod.ts";
-import type { CadTool, CadToolCategory, CadToolHandler } from "./tools/mod.ts";
-import type { MCPToolMeta } from "@casys/mcp-server";
+import type {
+  CadTool,
+  CadToolCategory,
+  CadToolHandler,
+  ExportArtifactPublisher,
+} from "./tools/mod.ts";
+import type { MCPToolMeta, ToolAnnotations } from "@casys/mcp-server";
 
 export {
   allTools,
@@ -31,11 +37,15 @@ export interface MCPToolWireFormat {
   description: string;
   inputSchema: Record<string, unknown>;
   outputSchema: Record<string, unknown>;
+  annotations?: ToolAnnotations;
   _meta?: MCPToolMeta;
 }
 
 export interface CadToolsClientOptions {
   categories?: string[];
+  artifactPublisher?: ExportArtifactPublisher;
+  /** Server-owned delivery root shared with the artifact publisher. */
+  exportDirectory?: string;
 }
 
 /** Client for executing CAD tools. */
@@ -43,9 +53,15 @@ export class CadToolsClient {
   private tools: CadTool[];
 
   constructor(options?: CadToolsClientOptions) {
+    const catalogue = createCadToolCatalogue({
+      artifactPublisher: options?.artifactPublisher,
+      exportDirectory: options?.exportDirectory,
+    });
     this.tools = options?.categories
-      ? options.categories.flatMap((cat) => getToolsByCategory(cat))
-      : allTools;
+      ? options.categories.flatMap((cat) =>
+        catalogue.toolsByCategory[cat] ?? []
+      )
+      : catalogue.allTools;
   }
 
   /** List available tools */
@@ -64,6 +80,7 @@ export class CadToolsClient {
       description: t.description,
       inputSchema: t.inputSchema,
       outputSchema: t.outputSchema,
+      annotations: t.annotations,
       _meta: t._meta,
     }));
   }

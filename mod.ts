@@ -24,8 +24,39 @@ export type {
   MCPToolWireFormat,
 } from "./src/client.ts";
 
-export { executeTools, geometryToolResult } from "./src/tools/execute.ts";
-export type { GeometryStructuredContent } from "./src/tools/execute.ts";
+export { executeTools } from "./src/tools/execute.ts";
+export { createExecuteTools, geometryToolResult } from "./src/tools/execute.ts";
+export type {
+  CreateExecuteToolsOptions,
+  ExportArtifactPublisher,
+  GeometryStructuredContent,
+} from "./src/tools/execute.ts";
+export {
+  BUILD123D_ARTIFACT_SCHEMA,
+  BUILD123D_ARTIFACT_URI_PREFIX,
+  BUILD123D_EXPORT_EXECUTION_SCHEMA,
+  Build123dArtifactError,
+  Build123dArtifactStore,
+  createBuild123dExportExecution,
+} from "./src/artifacts.ts";
+export type {
+  Build123dArtifactFormat,
+  Build123dArtifactReference,
+  Build123dExportExecution,
+  Build123dExportOutput,
+  CreateBuild123dExportExecutionInput,
+  PublishedCadExportFile,
+} from "./src/artifacts.ts";
+export { createCadMcpApp } from "./src/server-app.ts";
+export type {
+  CadMcpAppAssembly,
+  CreateCadMcpAppOptions,
+} from "./src/server-app.ts";
+export {
+  BUILD123D_TOOL_ERROR_SCHEMA,
+  build123dToolErrorResult,
+} from "./src/tool-errors.ts";
+export type { Build123dToolErrorPayload } from "./src/tool-errors.ts";
 export {
   ASSEMBLY_INTEGRITY_OUTPUT_SCHEMA,
   ASSEMBLY_INTEGRITY_TOOL,

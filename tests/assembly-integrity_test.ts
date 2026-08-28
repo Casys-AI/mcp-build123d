@@ -96,6 +96,24 @@ function pythonBin(): string {
   return Deno.env.get("BUILD123D_PYTHON_BIN") ?? "python3";
 }
 
+async function build123dRuntimeAvailable(): Promise<boolean> {
+  try {
+    return (await new Deno.Command(pythonBin(), {
+      args: ["-c", "import build123d, OCP"],
+      stdout: "null",
+      stderr: "null",
+    }).output()).success;
+  } catch {
+    return false;
+  }
+}
+
+const BUILD123D_RUNTIME_AVAILABLE = await build123dRuntimeAvailable();
+
+function backendTest(name: string, fn: () => Promise<void>): void {
+  Deno.test({ name, ignore: !BUILD123D_RUNTIME_AVAILABLE, fn });
+}
+
 function observerHandler() {
   const tool = assemblyIntegrityTools.find((candidate) =>
     candidate.name === ASSEMBLY_INTEGRITY_TOOL
@@ -170,346 +188,364 @@ function observedValue<T>(fact: Record<string, unknown>): T {
   return fact.value as T;
 }
 
-Deno.test("assembly integrity observes exact labels, unit, placements and separated pair facts", async () => {
-  const fixture = await fixtureInput("separated");
-  try {
-    const first = structuredContent(await observerHandler()(fixture.input));
-    const second = structuredContent(await observerHandler()(fixture.input));
-    assertEquals(second, first);
+backendTest(
+  "assembly integrity observes exact labels, unit, placements and separated pair facts",
+  async () => {
+    const fixture = await fixtureInput("separated");
+    try {
+      const first = structuredContent(await observerHandler()(fixture.input));
+      const second = structuredContent(await observerHandler()(fixture.input));
+      assertEquals(second, first);
 
-    assertEquals(
-      first.schemaVersion,
-      "build123d-assembly-integrity-observation/1.0",
+      assertEquals(
+        first.schemaVersion,
+        "build123d-assembly-integrity-observation/1.0",
+      );
+      assertEquals(first.kind, "assembly-integrity-observation");
+      assertEquals(first.producer, {
+        service: "mcp-build123d",
+        packageVersion: "0.5.1",
+        tool: "build123d_observe_assembly_integrity",
+        engine: { name: "cadquery-ocp", version: "7.9.3.1" },
+      });
+      assertEquals(
+        observedValue<string>(first.importability as Record<string, unknown>),
+        "imported",
+      );
+      assertEquals(
+        observedValue<string>(first.unitSystem as Record<string, unknown>),
+        "mm",
+      );
+      assertEquals(
+        observedValue<string>(
+          (first.topology as Record<string, Record<string, unknown>>)
+            .brepValidity,
+        ),
+        "valid",
+      );
+
+      const occurrences = observedValue<Array<Record<string, unknown>>>(
+        first.occurrences as Record<string, unknown>,
+      );
+      assertEquals(occurrences.map((occurrence) => occurrence.label), [
+        "alpha",
+        "bravo",
+      ]);
+      const bravoTransform = observedValue<number[]>(
+        occurrences[1]!.transform as Record<string, unknown>,
+      );
+      assertEquals(bravoTransform.slice(3, 4), [5]);
+      assertEquals(bravoTransform.slice(7, 8), [7]);
+      assertEquals(bravoTransform.slice(11, 12), [11]);
+      assertAlmostEquals(bravoTransform[0]!, 0, 1e-12);
+      assertEquals(bravoTransform[1], -1);
+      assertEquals(bravoTransform[4], 1);
+      assertAlmostEquals(bravoTransform[5]!, 0, 1e-12);
+      assertEquals(bravoTransform.slice(12), [0, 0, 0, 1]);
+
+      const pairs = observedValue<Array<Record<string, unknown>>>(
+        first.pairs as Record<string, unknown>,
+      );
+      assertEquals(pairs.length, 1);
+      assertEquals(pairs[0]!.firstLabel, "alpha");
+      assertEquals(pairs[0]!.secondLabel, "bravo");
+      assertEquals(pairs[0]!.linearToleranceMm, 0.000001);
+      assertEquals(
+        observedValue<string>(pairs[0]!.contact as Record<string, unknown>),
+        "no-contact",
+      );
+      assertEquals(
+        observedValue<number>(
+          pairs[0]!.intersectionVolumeMm3 as Record<string, unknown>,
+        ),
+        0,
+      );
+      assertEquals(
+        observedValue<number>(
+          pairs[0]!.minimumDistanceMm as Record<string, unknown>,
+        ) > 0.000001,
+        true,
+      );
+
+      const tool = assemblyIntegrityTools[0]!;
+      const validator = new SchemaValidator();
+      validator.addSchema("assembly-integrity-input", tool.inputSchema);
+      validator.addSchema("assembly-integrity-output", tool.outputSchema);
+      assertEquals(
+        validator.validate("assembly-integrity-input", fixture.input).valid,
+        true,
+      );
+      assertEquals(
+        validator.validate("assembly-integrity-output", first).valid,
+        true,
+      );
+    } finally {
+      await fixture.clean();
+    }
+  },
+);
+
+backendTest(
+  "assembly integrity reports contact and intersection as separate factual metrics",
+  async () => {
+    for (const mode of ["contact", "intersection"] as const) {
+      const fixture = await fixtureInput(mode);
+      try {
+        const observation = structuredContent(
+          await observerHandler()(fixture.input),
+        );
+        const pair = observedValue<Array<Record<string, unknown>>>(
+          observation.pairs as Record<string, unknown>,
+        )[0]!;
+        assertEquals(
+          observedValue<string>(pair.contact as Record<string, unknown>),
+          "contact",
+        );
+        assertEquals(
+          observedValue<number>(
+            pair.minimumDistanceMm as Record<string, unknown>,
+          ),
+          0,
+        );
+        const volume = observedValue<number>(
+          pair.intersectionVolumeMm3 as Record<string, unknown>,
+        );
+        assertEquals(mode === "intersection" ? volume > 0 : volume === 0, true);
+      } finally {
+        await fixture.clean();
+      }
+    }
+  },
+);
+
+backendTest(
+  "assembly integrity preserves factual import failure and identity or bound gaps",
+  async () => {
+    const malformed = new TextEncoder().encode(
+      "ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('empty'),'2;1');\n" +
+        "FILE_NAME('empty','',(''),(''),'','','');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\n" +
+        "ENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n",
     );
-    assertEquals(first.kind, "assembly-integrity-observation");
-    assertEquals(first.producer, {
-      service: "mcp-build123d",
-      packageVersion: "0.5.0",
-      tool: "build123d_observe_assembly_integrity",
-      engine: { name: "cadquery-ocp", version: "7.9.3.1" },
-    });
+    const failedInput = {
+      step: {
+        mimeType: "model/step",
+        sha256: await sha256Hex(malformed),
+        bytes: malformed.byteLength,
+        blob: malformed.toBase64(),
+      },
+    };
+    const failed = structuredContent(await observerHandler()(failedInput));
     assertEquals(
-      observedValue<string>(first.importability as Record<string, unknown>),
-      "imported",
+      observedValue<string>(failed.importability as Record<string, unknown>),
+      "failed",
     );
     assertEquals(
-      observedValue<string>(first.unitSystem as Record<string, unknown>),
-      "mm",
+      (failed.occurrences as Record<string, unknown>).status,
+      "unresolved",
     );
     assertEquals(
-      observedValue<string>(
-        (first.topology as Record<string, Record<string, unknown>>)
-          .brepValidity,
-      ),
-      "valid",
+      (failed.pairs as Record<string, unknown>).status,
+      "unresolved",
     );
 
-    const occurrences = observedValue<Array<Record<string, unknown>>>(
-      first.occurrences as Record<string, unknown>,
-    );
-    assertEquals(occurrences.map((occurrence) => occurrence.label), [
-      "alpha",
-      "bravo",
-    ]);
-    const bravoTransform = observedValue<number[]>(
-      occurrences[1]!.transform as Record<string, unknown>,
-    );
-    assertEquals(bravoTransform.slice(3, 4), [5]);
-    assertEquals(bravoTransform.slice(7, 8), [7]);
-    assertEquals(bravoTransform.slice(11, 12), [11]);
-    assertAlmostEquals(bravoTransform[0]!, 0, 1e-12);
-    assertEquals(bravoTransform[1], -1);
-    assertEquals(bravoTransform[4], 1);
-    assertAlmostEquals(bravoTransform[5]!, 0, 1e-12);
-    assertEquals(bravoTransform.slice(12), [0, 0, 0, 1]);
+    const single = await fixtureInput("single");
+    const limited = await fixtureInput("too-many");
+    try {
+      const singleObservation = structuredContent(
+        await observerHandler()(single.input),
+      );
+      assertEquals(
+        (singleObservation.occurrences as Record<string, unknown>).status,
+        "unresolved",
+      );
+      assertEquals(
+        (singleObservation.occurrences as Record<string, unknown>).reason,
+        "identity-missing",
+      );
+      assertEquals(
+        (singleObservation.pairs as Record<string, unknown>).reason,
+        "identity-missing",
+      );
 
-    const pairs = observedValue<Array<Record<string, unknown>>>(
-      first.pairs as Record<string, unknown>,
-    );
-    assertEquals(pairs.length, 1);
-    assertEquals(pairs[0]!.firstLabel, "alpha");
-    assertEquals(pairs[0]!.secondLabel, "bravo");
-    assertEquals(pairs[0]!.linearToleranceMm, 0.000001);
-    assertEquals(
-      observedValue<string>(pairs[0]!.contact as Record<string, unknown>),
-      "no-contact",
-    );
-    assertEquals(
-      observedValue<number>(
-        pairs[0]!.intersectionVolumeMm3 as Record<string, unknown>,
-      ),
-      0,
-    );
-    assertEquals(
-      observedValue<number>(
-        pairs[0]!.minimumDistanceMm as Record<string, unknown>,
-      ) > 0.000001,
-      true,
-    );
+      const limitedObservation = structuredContent(
+        await observerHandler()(limited.input),
+      );
+      assertEquals(
+        (limitedObservation.occurrences as Record<string, unknown>).status,
+        "unavailable",
+      );
+      assertEquals(
+        (limitedObservation.pairs as Record<string, unknown>).status,
+        "unavailable",
+      );
+    } finally {
+      await single.clean();
+      await limited.clean();
+    }
+  },
+);
 
-    const tool = assemblyIntegrityTools[0]!;
-    const validator = new SchemaValidator();
-    validator.addSchema("assembly-integrity-input", tool.inputSchema);
-    validator.addSchema("assembly-integrity-output", tool.outputSchema);
-    assertEquals(
-      validator.validate("assembly-integrity-input", fixture.input).valid,
-      true,
-    );
-    assertEquals(
-      validator.validate("assembly-integrity-output", first).valid,
-      true,
-    );
-  } finally {
-    await fixture.clean();
-  }
-});
-
-Deno.test("assembly integrity reports contact and intersection as separate factual metrics", async () => {
-  for (const mode of ["contact", "intersection"] as const) {
-    const fixture = await fixtureInput(mode);
+backendTest(
+  "assembly integrity keeps a successful multi-root import distinct from identity",
+  async () => {
+    const fixture = await fixtureInput("multi-root");
     try {
       const observation = structuredContent(
         await observerHandler()(fixture.input),
       );
-      const pair = observedValue<Array<Record<string, unknown>>>(
-        observation.pairs as Record<string, unknown>,
-      )[0]!;
       assertEquals(
-        observedValue<string>(pair.contact as Record<string, unknown>),
-        "contact",
-      );
-      assertEquals(
-        observedValue<number>(
-          pair.minimumDistanceMm as Record<string, unknown>,
+        observedValue<string>(
+          observation.importability as Record<string, unknown>,
         ),
-        0,
+        "imported",
       );
-      const volume = observedValue<number>(
-        pair.intersectionVolumeMm3 as Record<string, unknown>,
+      assertEquals(
+        (observation.occurrences as Record<string, unknown>).status,
+        "unresolved",
       );
-      assertEquals(mode === "intersection" ? volume > 0 : volume === 0, true);
+      assertEquals(
+        (observation.occurrences as Record<string, unknown>).reason,
+        "identity-missing",
+      );
+      assertEquals(
+        (observation.pairs as Record<string, unknown>).status,
+        "unresolved",
+      );
+      assertEquals(
+        (observation.topology as Record<string, Record<string, unknown>>)
+          .solidCount.status,
+        "observed",
+      );
     } finally {
       await fixture.clean();
     }
-  }
-});
+  },
+);
 
-Deno.test("assembly integrity preserves factual import failure and identity or bound gaps", async () => {
-  const malformed = new TextEncoder().encode(
-    "ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('empty'),'2;1');\n" +
-      "FILE_NAME('empty','',(''),(''),'','','');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\n" +
-      "ENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n",
-  );
-  const failedInput = {
-    step: {
-      mimeType: "model/step",
-      sha256: await sha256Hex(malformed),
-      bytes: malformed.byteLength,
-      blob: malformed.toBase64(),
-    },
-  };
-  const failed = structuredContent(await observerHandler()(failedInput));
-  assertEquals(
-    observedValue<string>(failed.importability as Record<string, unknown>),
-    "failed",
-  );
-  assertEquals(
-    (failed.occurrences as Record<string, unknown>).status,
-    "unresolved",
-  );
-  assertEquals((failed.pairs as Record<string, unknown>).status, "unresolved");
+backendTest(
+  "assembly integrity rejects tampered, nonclosed and noncanonical observations",
+  async () => {
+    const fixture = await fixtureInput("separated");
+    try {
+      const step = fixture.input.step as Record<string, unknown>;
+      await assertRejects(
+        async () =>
+          await observerHandler()({
+            step: { ...step, sha256: "0".repeat(64) },
+          }),
+        AssemblyIntegrityInputError,
+        "sha256",
+      );
+      await assertRejects(
+        async () =>
+          await observerHandler()({ ...fixture.input, unexpected: true }),
+        AssemblyIntegrityInputError,
+        "unsupported shape",
+      );
 
-  const single = await fixtureInput("single");
-  const limited = await fixtureInput("too-many");
-  try {
-    const singleObservation = structuredContent(
-      await observerHandler()(single.input),
-    );
-    assertEquals(
-      (singleObservation.occurrences as Record<string, unknown>).status,
-      "unresolved",
-    );
-    assertEquals(
-      (singleObservation.occurrences as Record<string, unknown>).reason,
-      "identity-missing",
-    );
-    assertEquals(
-      (singleObservation.pairs as Record<string, unknown>).reason,
-      "identity-missing",
-    );
+      const observation = structuredContent(
+        await observerHandler()(fixture.input),
+      );
+      const tampered = structuredClone(observation) as Record<string, unknown>;
+      const pairs = (tampered.pairs as Record<string, unknown>).value as Array<
+        Record<string, unknown>
+      >;
+      ((pairs[0]!.minimumDistanceMm as Record<string, unknown>).value) = -0;
+      assertThrows(
+        () =>
+          parseAssemblyIntegrityObservation(tampered, artifact(fixture.input)),
+        AssemblyIntegrityObservationError,
+        "non-negative finite",
+      );
 
-    const limitedObservation = structuredContent(
-      await observerHandler()(limited.input),
-    );
-    assertEquals(
-      (limitedObservation.occurrences as Record<string, unknown>).status,
-      "unavailable",
-    );
-    assertEquals(
-      (limitedObservation.pairs as Record<string, unknown>).status,
-      "unavailable",
-    );
-  } finally {
-    await single.clean();
-    await limited.clean();
-  }
-});
+      const negativeZeroTopology = structuredClone(observation) as Record<
+        string,
+        unknown
+      >;
+      (((negativeZeroTopology.topology as Record<string, unknown>)
+        .solidCount as Record<string, unknown>).value) = -0;
+      assertThrows(
+        () =>
+          parseAssemblyIntegrityObservation(
+            negativeZeroTopology,
+            artifact(fixture.input),
+          ),
+        AssemblyIntegrityObservationError,
+        "non-negative safe integer",
+      );
 
-Deno.test("assembly integrity keeps a successful multi-root import distinct from identity", async () => {
-  const fixture = await fixtureInput("multi-root");
-  try {
-    const observation = structuredContent(
-      await observerHandler()(fixture.input),
-    );
-    assertEquals(
-      observedValue<string>(
-        observation.importability as Record<string, unknown>,
-      ),
-      "imported",
-    );
-    assertEquals(
-      (observation.occurrences as Record<string, unknown>).status,
-      "unresolved",
-    );
-    assertEquals(
-      (observation.occurrences as Record<string, unknown>).reason,
-      "identity-missing",
-    );
-    assertEquals(
-      (observation.pairs as Record<string, unknown>).status,
-      "unresolved",
-    );
-    assertEquals(
-      (observation.topology as Record<string, Record<string, unknown>>)
-        .solidCount.status,
-      "observed",
-    );
-  } finally {
-    await fixture.clean();
-  }
-});
+      const reversedPair = structuredClone(observation) as Record<
+        string,
+        unknown
+      >;
+      const reversed = ((reversedPair.pairs as Record<string, unknown>)
+        .value as Array<Record<string, unknown>>)[0]!;
+      [reversed.firstLabel, reversed.secondLabel] = [
+        reversed.secondLabel,
+        reversed.firstLabel,
+      ];
+      assertThrows(
+        () =>
+          parseAssemblyIntegrityObservation(
+            reversedPair,
+            artifact(fixture.input),
+          ),
+        AssemblyIntegrityObservationError,
+        "noncanonical pair",
+      );
 
-Deno.test("assembly integrity rejects tampered, nonclosed and noncanonical observations", async () => {
-  const fixture = await fixtureInput("separated");
-  try {
-    const step = fixture.input.step as Record<string, unknown>;
-    await assertRejects(
-      async () =>
-        await observerHandler()({
-          step: { ...step, sha256: "0".repeat(64) },
-        }),
-      AssemblyIntegrityInputError,
-      "sha256",
-    );
-    await assertRejects(
-      async () =>
-        await observerHandler()({ ...fixture.input, unexpected: true }),
-      AssemblyIntegrityInputError,
-      "unsupported shape",
-    );
+      const reflected = structuredClone(observation) as Record<string, unknown>;
+      const transform = (((reflected.occurrences as Record<string, unknown>)
+        .value as Array<Record<string, unknown>>)[0]!
+        .transform as Record<string, unknown>).value as number[];
+      transform[0] = -1;
+      assertThrows(
+        () =>
+          parseAssemblyIntegrityObservation(reflected, artifact(fixture.input)),
+        AssemblyIntegrityObservationError,
+        "right-handed",
+      );
 
-    const observation = structuredContent(
-      await observerHandler()(fixture.input),
-    );
-    const tampered = structuredClone(observation) as Record<string, unknown>;
-    const pairs = (tampered.pairs as Record<string, unknown>).value as Array<
-      Record<string, unknown>
-    >;
-    ((pairs[0]!.minimumDistanceMm as Record<string, unknown>).value) = -0;
-    assertThrows(
-      () =>
-        parseAssemblyIntegrityObservation(tampered, artifact(fixture.input)),
-      AssemblyIntegrityObservationError,
-      "non-negative finite",
-    );
+      const forgedProducer = structuredClone(observation) as Record<
+        string,
+        unknown
+      >;
+      ((forgedProducer.producer as Record<string, unknown>).engine as Record<
+        string,
+        unknown
+      >).version = "0";
+      assertThrows(
+        () =>
+          parseAssemblyIntegrityObservation(
+            forgedProducer,
+            artifact(fixture.input),
+          ),
+        AssemblyIntegrityObservationError,
+        "producer",
+      );
 
-    const negativeZeroTopology = structuredClone(observation) as Record<
-      string,
-      unknown
-    >;
-    (((negativeZeroTopology.topology as Record<string, unknown>)
-      .solidCount as Record<string, unknown>).value) = -0;
-    assertThrows(
-      () =>
-        parseAssemblyIntegrityObservation(
-          negativeZeroTopology,
-          artifact(fixture.input),
+      const overLimit = structuredClone(observation) as Record<string, unknown>;
+      overLimit.occurrences = {
+        status: "observed",
+        value: Array.from(
+          { length: ASSEMBLY_INTEGRITY_MAXIMUM_OCCURRENCES + 1 },
+          (_, index) => ({
+            label: `item-${index.toString().padStart(2, "0")}`,
+            transform: { status: "unavailable", reason: "unsupported" },
+          }),
         ),
-      AssemblyIntegrityObservationError,
-      "non-negative safe integer",
-    );
-
-    const reversedPair = structuredClone(observation) as Record<
-      string,
-      unknown
-    >;
-    const reversed = ((reversedPair.pairs as Record<string, unknown>)
-      .value as Array<Record<string, unknown>>)[0]!;
-    [reversed.firstLabel, reversed.secondLabel] = [
-      reversed.secondLabel,
-      reversed.firstLabel,
-    ];
-    assertThrows(
-      () =>
-        parseAssemblyIntegrityObservation(
-          reversedPair,
-          artifact(fixture.input),
-        ),
-      AssemblyIntegrityObservationError,
-      "noncanonical pair",
-    );
-
-    const reflected = structuredClone(observation) as Record<string, unknown>;
-    const transform = (((reflected.occurrences as Record<string, unknown>)
-      .value as Array<Record<string, unknown>>)[0]!
-      .transform as Record<string, unknown>).value as number[];
-    transform[0] = -1;
-    assertThrows(
-      () =>
-        parseAssemblyIntegrityObservation(reflected, artifact(fixture.input)),
-      AssemblyIntegrityObservationError,
-      "right-handed",
-    );
-
-    const forgedProducer = structuredClone(observation) as Record<
-      string,
-      unknown
-    >;
-    ((forgedProducer.producer as Record<string, unknown>).engine as Record<
-      string,
-      unknown
-    >).version = "0";
-    assertThrows(
-      () =>
-        parseAssemblyIntegrityObservation(
-          forgedProducer,
-          artifact(fixture.input),
-        ),
-      AssemblyIntegrityObservationError,
-      "producer",
-    );
-
-    const overLimit = structuredClone(observation) as Record<string, unknown>;
-    overLimit.occurrences = {
-      status: "observed",
-      value: Array.from(
-        { length: ASSEMBLY_INTEGRITY_MAXIMUM_OCCURRENCES + 1 },
-        (_, index) => ({
-          label: `item-${index.toString().padStart(2, "0")}`,
-          transform: { status: "unavailable", reason: "unsupported" },
-        }),
-      ),
-    };
-    assertThrows(
-      () =>
-        parseAssemblyIntegrityObservation(overLimit, artifact(fixture.input)),
-      AssemblyIntegrityObservationError,
-      "occurrence bound",
-    );
-  } finally {
-    await fixture.clean();
-  }
-});
+      };
+      assertThrows(
+        () =>
+          parseAssemblyIntegrityObservation(overLimit, artifact(fixture.input)),
+        AssemblyIntegrityObservationError,
+        "occurrence bound",
+      );
+    } finally {
+      await fixture.clean();
+    }
+  },
+);
 
 Deno.test("assembly integrity rejects a nonzero or noisy private harness before receipt parsing", async () => {
   const bytes = new TextEncoder().encode(

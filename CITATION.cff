@@ -1,6 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "mcp-build123d: MCP server for build123d — parametric CAD as code (Python/OCCT) driven by AI agents"
+version: 0.5.1
+date-released: 2026-08-28
 authors:
   - family-names: Pesle
     given-names: Erwan Lee

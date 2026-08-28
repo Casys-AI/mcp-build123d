@@ -4,13 +4,13 @@
  * @module lib/cad/tools/types
  */
 
-import type { MCPToolMeta, StructuredToolResult } from "@casys/mcp-server";
+import type { MCPToolMeta, ToolAnnotations } from "@casys/mcp-server";
 
 export type CadToolCategory = "execute";
 
 export type CadToolHandler = (
   args: Record<string, unknown>,
-) => Promise<StructuredToolResult> | StructuredToolResult;
+) => Promise<unknown> | unknown;
 
 /** CAD tool definition with handler */
 export interface CadTool {
@@ -21,5 +21,7 @@ export interface CadTool {
   /** JSON Schema for the structured result consumed by MCP Apps. */
   outputSchema: Record<string, unknown>;
   handler: CadToolHandler;
+  /** Client-facing behavioural hints for safe tool selection. */
+  annotations?: ToolAnnotations;
   _meta?: MCPToolMeta;
 }

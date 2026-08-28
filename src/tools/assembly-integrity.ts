@@ -247,6 +247,12 @@ export const assemblyIntegrityTools: CadTool[] = [{
     "The result reports factual import, unit, topology, direct occurrence and " +
     "pairwise observations, with unresolved or unavailable facts preserved.",
   category: "execute",
+  annotations: {
+    title: "Observe STEP assembly integrity",
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: INPUT_SCHEMA,
   outputSchema: ASSEMBLY_INTEGRITY_OUTPUT_SCHEMA,
   handler: async (args): Promise<StructuredToolResult> => {

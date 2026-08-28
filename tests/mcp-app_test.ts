@@ -1,18 +1,37 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+/** Real HTTP wire coverage for the build123d MCP application. */
+
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { CadToolsClient } from "../src/client.ts";
-import { ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES } from "../src/api/assembly-integrity-bridge.ts";
-import { createCadMcpApp } from "../src/server-app.ts";
-import { geometryToolResult } from "../src/tools/execute.ts";
 import {
-  ARTIFACT_HELPER_VIEWER_URI,
-  RESULTS_VIEWER_URI,
-} from "../src/ui/constants.ts";
+  ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES,
+  AssemblyIntegrityObservationError,
+} from "../src/api/assembly-integrity-bridge.ts";
+import { createBuild123dExportExecution } from "../src/artifacts.ts";
+import { createCadMcpApp } from "../src/server-app.ts";
+import { build123dToolErrorResult } from "../src/tool-errors.ts";
+import { geometryToolResult } from "../src/tools/execute.ts";
+import { RESULTS_VIEWER_URI } from "../src/ui/constants.ts";
 
 const PROTOCOL_VERSION = "2026-07-28";
 const PROTOCOL_KEY = "io.modelcontextprotocol/protocolVersion";
 const CAPABILITIES_KEY = "io.modelcontextprotocol/clientCapabilities";
 
-function startOnFreePort() {
+const FIXTURE_GLB = new Uint8Array([
+  0x67,
+  0x6c,
+  0x54,
+  0x46,
+  2,
+  0,
+  0,
+  0,
+  12,
+  0,
+  0,
+  0,
+]);
+
+function startOnFreePort(): number {
   const listener = Deno.listen({ port: 0 });
   const port = (listener.addr as Deno.NetAddr).port;
   listener.close();
@@ -23,18 +42,16 @@ async function mcpRpc(
   port: number,
   method: string,
   params: Record<string, unknown> = {},
-) {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "MCP-Protocol-Version": PROTOCOL_VERSION,
-    "Mcp-Method": method,
-  };
-  if (method === "tools/call" && typeof params.name === "string") {
-    headers["Mcp-Name"] = params.name;
-  }
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const name = method === "resources/read" ? params.uri : params.name;
   const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      "MCP-Protocol-Version": PROTOCOL_VERSION,
+      "Mcp-Method": method,
+      ...(typeof name === "string" ? { "Mcp-Name": name } : {}),
+    },
     body: JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
@@ -48,10 +65,11 @@ async function mcpRpc(
       },
     }),
   });
-  return {
-    status: response.status,
-    body: await response.json() as Record<string, unknown>,
-  };
+  return { status: response.status, body: await response.json() };
+}
+
+function assertNoHostPath(value: unknown, path: string): void {
+  assertEquals(JSON.stringify(value).includes(path), false);
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -62,6 +80,98 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
     new Uint8Array(digest),
     (byte) => byte.toString(16).padStart(2, "0"),
   ).join("");
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\\\''")}'`;
+}
+
+async function createFakeCadInterpreter(root: string): Promise<string> {
+  const harness = `${root}/fake-build123d.ts`;
+  const interpreter = `${root}/fake-python`;
+  await Deno.writeTextFile(
+    harness,
+    `
+const fixture = new Uint8Array(${JSON.stringify(Array.from(FIXTURE_GLB))});
+if (
+  Deno.args[0] === "-c" &&
+  Deno.args[1]?.includes("import os, stat, sys\\n")
+) {
+  await Deno.stdout.write(
+    await Deno.readFile(Deno.args[2] + "/" + Deno.args[3]),
+  );
+  Deno.exit(0);
+}
+const request = JSON.parse(await new Response(Deno.stdin.readable).text());
+const copy = new ArrayBuffer(fixture.byteLength);
+new Uint8Array(copy).set(fixture);
+const sha256 = Array.from(
+  new Uint8Array(await crypto.subtle.digest("SHA-256", copy)),
+  (byte) => byte.toString(16).padStart(2, "0"),
+).join("");
+for (const file of request.exports) {
+  await Deno.writeFile(file.path, fixture);
+}
+console.log(JSON.stringify({
+  ok: true,
+  metrics: ${JSON.stringify(METRICS)},
+  exports: request.exports.map((file) => ({
+    format: file.format,
+    path: file.path,
+    bytes: fixture.byteLength,
+    sha256,
+  })),
+}));
+`,
+  );
+  await Deno.writeTextFile(
+    interpreter,
+    `#!/bin/sh\nexec ${
+      shellQuote(Deno.execPath())
+    } run --quiet --allow-read --allow-write ${shellQuote(harness)} "$@"\n`,
+    { mode: 0o700 },
+  );
+  return interpreter;
+}
+
+async function withServerRoots<T>(
+  run: (
+    roots: { exportsDirectory: string; artifactsDirectory: string },
+  ) => Promise<T>,
+): Promise<T> {
+  const root = await Deno.makeTempDir({ prefix: "mcp-build123d-wire-" });
+  const exportsDirectory = `${root}/delivery`;
+  const artifactsDirectory = `${root}/artifacts`;
+  await Deno.mkdir(exportsDirectory);
+  try {
+    return await run({ exportsDirectory, artifactsDirectory });
+  } finally {
+    await Deno.remove(root, { recursive: true });
+  }
+}
+
+function testAssembly(exportsDirectory?: string, artifactsDirectory?: string) {
+  return createCadMcpApp({
+    exportDirectory: exportsDirectory,
+    artifactDirectory: artifactsDirectory,
+    viewerModuleUrl: "file:///project/server.ts",
+    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
+  });
+}
+
+const BUILD123D_RUNTIME_AVAILABLE = await (async () => {
+  try {
+    return (await new Deno.Command(
+      Deno.env.get("BUILD123D_PYTHON_BIN") ?? "python3",
+      { args: ["-c", "import build123d"], stdout: "null", stderr: "null" },
+    ).output()).success;
+  } catch {
+    return false;
+  }
+})();
+
+function cadTest(name: string, fn: () => Promise<void>): void {
+  Deno.test({ name, ignore: !BUILD123D_RUNTIME_AVAILABLE, fn });
 }
 
 const METRICS = {
@@ -78,229 +188,465 @@ const METRICS = {
   edges: 12,
 };
 
-Deno.test("geometry result keeps a concise fallback and no source or file contents", () => {
-  const result = geometryToolResult("execution", METRICS, []);
-
-  assertStringIncludes(result.content, "1,000 mm³ volume");
-  assertStringIncludes(result.content, "700 mm² area");
-  assertStringIncludes(result.content, "0 files");
-  assertEquals(result.structuredContent, {
-    schemaVersion: "1.0",
-    kind: "execution",
-    metrics: METRICS,
-    files: [],
-  });
-  assertEquals("script" in result.structuredContent, false);
+Deno.test("geometry fallback is compact and export payload has no delivery path", () => {
+  const execution = geometryToolResult("execution", METRICS, []);
+  assertStringIncludes(execution.content, "1,000 mm³ volume");
+  assertStringIncludes(execution.content, "700 mm² area");
+  assertEquals("script" in execution.structuredContent, false);
 
   const exported = geometryToolResult("export", METRICS, [{
     format: "gltf",
-    path: "/exports/assembly.glb",
-    bytes: 2048,
-    sha256: "a".repeat(64),
-  }]);
-  assertEquals(exported.structuredContent.files, [{
-    format: "gltf",
-    path: "/exports/assembly.glb",
-    bytes: 2048,
-    sha256: "a".repeat(64),
-    viewer: {
-      toolName: "build123d_export_read",
-      name: "assembly.glb",
+    artifact: {
+      schemaVersion: "build123d-export-artifact/1.0",
+      uri: `casys://build123d/artifacts/${"a".repeat(64)}.glb`,
+      format: "gltf",
+      mimeType: "model/gltf-binary",
+      bytes: 2048,
+      sha256: "a".repeat(64),
     },
   }]);
-  assertEquals("base64" in exported.structuredContent, false);
+  const file =
+    (exported.structuredContent.files as Array<Record<string, unknown>>)[0];
+  assertEquals("path" in file, false);
+  assertEquals("base64" in file, false);
+  assertStringIncludes(exported.content, "Immutable export resources");
 });
 
-Deno.test("build123d MCP App tools publish the shared viewer and explicit output schema", () => {
+Deno.test("an injected export directory is shared by the runner and artifact store", async () => {
+  const root = await Deno.makeTempDir({
+    prefix: "mcp-build123d-injected-root-",
+  });
+  const injected = `${root}/injected`;
+  const wrong = `${root}/wrong`;
+  await Deno.mkdir(injected);
+  const interpreter = await createFakeCadInterpreter(root);
+  const previousPython = Deno.env.get("BUILD123D_PYTHON_BIN");
+  const previousExport = Deno.env.get("BUILD123D_EXPORT_DIR");
+  Deno.env.set("BUILD123D_PYTHON_BIN", interpreter);
+  Deno.env.set("BUILD123D_EXPORT_DIR", wrong);
+  try {
+    const assembly = createCadMcpApp({
+      exportDirectory: injected,
+      viewerModuleUrl: "file:///project/server.ts",
+      viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
+    });
+    const exportHandler = assembly.toolsClient.buildHandlersMap().get(
+      "build123d_export",
+    );
+    if (!exportHandler) throw new Error("Missing export handler");
+    const result = await exportHandler({
+      script: "result = fixture",
+      formats: ["gltf"],
+      name: "injected-root",
+    });
+    const file = (result as {
+      structuredContent: {
+        files: Array<{
+          artifact: Record<string, unknown>;
+        }>;
+      };
+    }).structuredContent.files[0];
+    assertEquals(
+      file.artifact.uri,
+      `casys://build123d/artifacts/${await sha256Hex(FIXTURE_GLB)}.glb`,
+    );
+    assertEquals(
+      (await Deno.stat(`${injected}/injected-root.glb`)).isFile,
+      true,
+    );
+    await assertRejects(() => Deno.lstat(wrong), Deno.errors.NotFound);
+  } finally {
+    if (previousPython === undefined) Deno.env.delete("BUILD123D_PYTHON_BIN");
+    else Deno.env.set("BUILD123D_PYTHON_BIN", previousPython);
+    if (previousExport === undefined) Deno.env.delete("BUILD123D_EXPORT_DIR");
+    else Deno.env.set("BUILD123D_EXPORT_DIR", previousExport);
+    await Deno.remove(root, { recursive: true });
+  }
+});
+
+Deno.test("tool descriptors give agents a factual contract and behavioral hints", () => {
   const tools = new CadToolsClient().toMCPFormat();
   assertEquals(tools.map((tool) => tool.name), [
     "build123d_execute",
     "build123d_export",
-    "build123d_export_read",
     "build123d_observe_assembly_integrity",
   ]);
-  for (const tool of tools) {
-    if (tool.name === "build123d_export_read") {
-      assertEquals(tool._meta?.ui, {
-        resourceUri: ARTIFACT_HELPER_VIEWER_URI,
-      });
-      assertEquals(
-        (tool.outputSchema.properties as { kind: { const: string } }).kind
-          .const,
-        "gltf-binary",
-      );
-      continue;
-    }
-    if (tool.name === "build123d_observe_assembly_integrity") {
-      assertEquals(tool._meta, undefined);
-      assertEquals(
-        (tool.outputSchema.properties as { kind: { const: string } }).kind
-          .const,
-        "assembly-integrity-observation",
-      );
-      assertEquals(
-        (tool.inputSchema as { additionalProperties: boolean })
-          .additionalProperties,
-        false,
-      );
-      continue;
-    }
-    assertEquals(tool._meta?.ui?.resourceUri, RESULTS_VIEWER_URI);
-    assertEquals(
-      (tool.outputSchema.properties as { kind: { const: string } }).kind.const,
-      tool.name === "build123d_execute" ? "execution" : "export",
-    );
-    assertEquals(
-      (tool.outputSchema.properties as {
-        metrics: { properties: Record<string, { minimum: number }> };
-      })
-        .metrics.properties.volume_mm3.minimum,
-      0,
-    );
-    assertEquals(
-      (tool.outputSchema.properties as {
-        metrics: {
-          properties: {
-            density_kg_m3: { exclusiveMinimum: number };
-            mass_kg: { minimum: number };
-          };
-        };
-      }).metrics.properties.density_kg_m3.exclusiveMinimum,
-      0,
-    );
-    assertEquals(
-      (tool.outputSchema.properties as {
-        metrics: { properties: { mass_kg: { minimum: number } } };
-      }).metrics.properties.mass_kg.minimum,
-      0,
-    );
-  }
+  const execute = tools.find((tool) => tool.name === "build123d_execute");
+  const exported = tools.find((tool) => tool.name === "build123d_export");
+  const observed = tools.find((tool) =>
+    tool.name === "build123d_observe_assembly_integrity"
+  );
+  if (!execute || !exported || !observed) throw new Error("Missing CAD tools");
+  assertEquals(execute._meta?.ui?.resourceUri, RESULTS_VIEWER_URI);
+  assertEquals(exported._meta?.ui?.resourceUri, RESULTS_VIEWER_URI);
+  assertEquals(execute.annotations?.destructiveHint, true);
+  assertEquals(execute.annotations?.idempotentHint, false);
+  assertEquals(execute.annotations?.openWorldHint, true);
+  assertEquals(observed.annotations, {
+    title: "Observe STEP assembly integrity",
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assertStringIncludes(exported.description, "resources/read");
+  assertEquals(
+    tools.some((tool) => tool.name === "build123d_export_read"),
+    false,
+  );
 });
 
-Deno.test("build123d tools/list uses the stateless 2026 wire contract", async () => {
-  const assembly = createCadMcpApp({
-    viewerModuleUrl: "file:///project/server.ts",
-    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
-  });
+Deno.test("HTTP discover and tools/list expose instructions, annotations and stateless transport", async () => {
+  const assembly = testAssembly();
   const port = startOnFreePort();
   const http = await assembly.app.startHttp({ port, onListen: () => {} });
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "MCP-Protocol-Version": PROTOCOL_VERSION,
-        "Mcp-Method": "tools/list",
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/list",
-        params: {
-          _meta: {
-            [PROTOCOL_KEY]: PROTOCOL_VERSION,
-            [CAPABILITIES_KEY]: {},
-          },
-        },
-      }),
-    });
-    assertEquals(response.status, 200);
-    const body = await response.json() as {
-      result: { tools: Array<Record<string, unknown>> };
-    };
-    // A model-only tools/list does not advertise the app-only GLB reader.
+    const discover = await mcpRpc(port, "server/discover");
+    assertEquals(discover.status, 200);
     assertEquals(
-      body.result.tools.map((tool) => tool.name),
-      [
-        "build123d_execute",
-        "build123d_export",
-        "build123d_observe_assembly_integrity",
-      ],
+      (discover.body.result as { serverInfo: unknown }).serverInfo,
+      { name: "mcp-build123d", version: "0.5.1" },
     );
-    for (const tool of body.result.tools) {
-      if (tool.name === "build123d_export_read") {
-        assertEquals((tool._meta as { ui: unknown }).ui, {
-          resourceUri: ARTIFACT_HELPER_VIEWER_URI,
-        });
-        continue;
-      }
-      if (tool.name === "build123d_observe_assembly_integrity") {
-        assertEquals(tool._meta, undefined);
-        assertEquals(
-          (tool.outputSchema as { properties: { kind: { const: string } } })
-            .properties.kind.const,
-          "assembly-integrity-observation",
-        );
-        continue;
-      }
-      assertEquals(
-        (tool._meta as { ui: { resourceUri: string } }).ui.resourceUri,
-        RESULTS_VIEWER_URI,
-      );
-      assertEquals(
-        (tool.outputSchema as { properties: { kind: { const: string } } })
-          .properties.kind.const,
-        tool.name === "build123d_execute" ? "execution" : "export",
-      );
-    }
-  } finally {
-    await http.shutdown();
-  }
-});
+    assertStringIncludes(
+      (discover.body.result as { instructions: string }).instructions,
+      "resources/read",
+    );
+    assertStringIncludes(
+      (discover.body.result as { instructions: string }).instructions,
+      "trusted arbitrary Python",
+    );
 
-Deno.test("build123d server/discover uses the 2026-07-28 stateless wire without a session", async () => {
-  const assembly = createCadMcpApp({
-    viewerModuleUrl: "file:///project/server.ts",
-    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
-  });
-  const port = startOnFreePort();
-  const http = await assembly.app.startHttp({ port, onListen: () => {} });
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "MCP-Protocol-Version": PROTOCOL_VERSION,
-        "Mcp-Method": "server/discover",
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 2,
-        method: "server/discover",
-        params: {
-          _meta: {
-            [PROTOCOL_KEY]: PROTOCOL_VERSION,
-            [CAPABILITIES_KEY]: {},
-          },
-        },
-      }),
-    });
-    assertEquals(response.status, 200);
+    const listed = await mcpRpc(port, "tools/list");
+    const tools =
+      (listed.body.result as { tools: Array<Record<string, unknown>> })
+        .tools;
+    const exported = tools.find((tool) => tool.name === "build123d_export");
     assertEquals(
-      response.headers.get("mcp-protocol-version"),
-      PROTOCOL_VERSION,
-    );
-    assertEquals(response.headers.get("mcp-session-id"), null);
-    const body = await response.json() as {
-      result: {
-        supportedVersions: string[];
-        serverInfo: { name: string; version: string };
-      };
-    };
-    assertEquals(
-      body.result.supportedVersions.includes(PROTOCOL_VERSION),
+      (exported?.annotations as { destructiveHint: boolean }).destructiveHint,
       true,
     );
-    assertEquals(body.result.serverInfo, {
-      name: "mcp-build123d",
-      version: "0.5.0",
-    });
+    assertEquals(
+      (exported?.annotations as { idempotentHint: boolean }).idempotentHint,
+      false,
+    );
+    assertEquals(
+      (exported?.annotations as { openWorldHint: boolean }).openWorldHint,
+      true,
+    );
   } finally {
     await http.shutdown();
   }
 });
 
-Deno.test("build123d result viewer reads the exact published remote bundle path", async () => {
+Deno.test("HTTP resources/list and resources/read preserve promoted digest-bound bytes", async () => {
+  await withServerRoots(async ({ exportsDirectory, artifactsDirectory }) => {
+    const assembly = testAssembly(exportsDirectory, artifactsDirectory);
+    const port = startOnFreePort();
+    const http = await assembly.app.startHttp({ port, onListen: () => {} });
+    try {
+      const path = `${exportsDirectory}/wire.glb`;
+      await Deno.writeFile(path, FIXTURE_GLB);
+      const exportFile = {
+        format: "gltf",
+        path,
+        bytes: FIXTURE_GLB.byteLength,
+        sha256: await sha256Hex(FIXTURE_GLB),
+      } as const;
+      const [published] = await assembly.artifactStore.publishExports(
+        [exportFile],
+        await createBuild123dExportExecution({
+          script: "# HTTP artifact fixture\nresult = fixture",
+          formats: ["gltf"],
+          name: "wire",
+          metrics: METRICS,
+          exports: [exportFile],
+        }),
+      );
+      const { uri, sha256, bytes } = published.artifact;
+
+      const listed = await mcpRpc(port, "resources/list");
+      const resources =
+        (listed.body.result as { resources: Array<Record<string, unknown>> })
+          .resources;
+      const resource = resources.find((candidate) => candidate.uri === uri);
+      assertEquals(resource?.mimeType, "model/gltf-binary");
+      assertEquals(resource?.size, bytes);
+      assertEquals(
+        (resource?._meta as Record<string, Record<string, unknown>>)[
+          "io.casys.mcp-build123d/artifact"
+        ].sha256,
+        sha256,
+      );
+
+      const read = await mcpRpc(port, "resources/read", { uri });
+      const content =
+        (read.body.result as { contents: Array<Record<string, unknown>> })
+          .contents[0];
+      assertEquals(content.uri, uri);
+      assertEquals(content.mimeType, "model/gltf-binary");
+      assertEquals(typeof content.blob, "string");
+      const received = Uint8Array.from(
+        atob(content.blob as string),
+        (char) => char.charCodeAt(0),
+      );
+      assertEquals(received.byteLength, bytes);
+      assertEquals(await sha256Hex(received), sha256);
+
+      const fabricated = await mcpRpc(port, "resources/read", {
+        uri: `casys://build123d/artifacts/${"f".repeat(64)}.step`,
+      });
+      assertEquals(fabricated.body.result, undefined);
+      assertStringIncludes(JSON.stringify(fabricated.body.error), "Resource");
+    } finally {
+      await http.shutdown();
+    }
+  });
+});
+
+cadTest(
+  "a native non-geometric result is a structured CAD execution failure",
+  async () => {
+    const assembly = testAssembly();
+    const port = startOnFreePort();
+    const http = await assembly.app.startHttp({ port, onListen: () => {} });
+    try {
+      const response = await mcpRpc(port, "tools/call", {
+        name: "build123d_execute",
+        arguments: { script: "result = 42" },
+      });
+      const result = response.body.result as {
+        isError: boolean;
+        structuredContent: Record<string, unknown>;
+      };
+      assertEquals(result.isError, true);
+      assertEquals(
+        result.structuredContent.schemaVersion,
+        "build123d-tool-error/1.0",
+      );
+      assertEquals(result.structuredContent.kind, "error");
+      assertEquals(result.structuredContent.tool, "build123d_execute");
+      assertEquals(result.structuredContent.code, "cad.execution_failed");
+      assertEquals(typeof result.structuredContent.recovery, "string");
+    } finally {
+      await http.shutdown();
+    }
+  },
+);
+
+Deno.test(
+  "an explicitly missing build123d runtime is a structured recovery error",
+  async () => {
+    const directory = await Deno.makeTempDir({
+      prefix: "mcp-build123d-missing-runtime-",
+    });
+    const interpreter = `${directory}/python-without-build123d`;
+    const secretInterpreter = "/Users/secret/build123d/python3";
+    const previousPython = Deno.env.get("BUILD123D_PYTHON_BIN");
+    await Deno.writeTextFile(
+      interpreter,
+      "#!/bin/sh\n" +
+        "cat >/dev/null\n" +
+        `printf '%s\\n' ${
+          shellQuote(JSON.stringify({
+            ok: false,
+            error: "build123d is not installed for this Python interpreter. " +
+              `(interpreter: ${secretInterpreter})`,
+            traceback: `ImportError at ${secretInterpreter}`,
+          }))
+        }\n`,
+      { mode: 0o700 },
+    );
+    Deno.env.set("BUILD123D_PYTHON_BIN", interpreter);
+    try {
+      const assembly = testAssembly();
+      const port = startOnFreePort();
+      const http = await assembly.app.startHttp({ port, onListen: () => {} });
+      try {
+        const response = await mcpRpc(port, "tools/call", {
+          name: "build123d_execute",
+          arguments: { script: "result = 42" },
+        });
+        const result = response.body.result as {
+          isError: boolean;
+          structuredContent: Record<string, unknown>;
+        };
+        assertEquals(result.isError, true);
+        assertEquals(
+          result.structuredContent.schemaVersion,
+          "build123d-tool-error/1.0",
+        );
+        assertEquals(result.structuredContent.kind, "error");
+        assertEquals(result.structuredContent.tool, "build123d_execute");
+        assertEquals(
+          result.structuredContent.code,
+          "runtime.build123d_unavailable",
+        );
+        assertEquals(typeof result.structuredContent.recovery, "string");
+        assertNoHostPath(response.body, secretInterpreter);
+      } finally {
+        await http.shutdown();
+      }
+    } finally {
+      if (previousPython === undefined) {
+        Deno.env.delete("BUILD123D_PYTHON_BIN");
+      } else {
+        Deno.env.set("BUILD123D_PYTHON_BIN", previousPython);
+      }
+      await Deno.remove(directory, { recursive: true });
+    }
+  },
+);
+
+Deno.test("Python and harness failures never expose host paths through HTTP", async () => {
+  const secretPython = "/Users/secret/runtime/python3";
+  const previousPython = Deno.env.get("BUILD123D_PYTHON_BIN");
+  try {
+    Deno.env.set("BUILD123D_PYTHON_BIN", secretPython);
+    const missingAssembly = testAssembly();
+    const missingPort = startOnFreePort();
+    const missingHttp = await missingAssembly.app.startHttp({
+      port: missingPort,
+      onListen: () => {},
+    });
+    try {
+      const missing = await mcpRpc(missingPort, "tools/call", {
+        name: "build123d_execute",
+        arguments: { script: "result = fixture" },
+      });
+      const result = missing.body.result as {
+        isError: boolean;
+        structuredContent: Record<string, unknown>;
+      };
+      assertEquals(result.isError, true);
+      assertEquals(result.structuredContent.code, "runtime.python_unavailable");
+      assertNoHostPath(missing.body, secretPython);
+    } finally {
+      await missingHttp.shutdown();
+    }
+
+    const root = await Deno.makeTempDir({
+      prefix: "mcp-build123d-redacted-harness-",
+    });
+    const interpreter = `${root}/fake-python`;
+    const secretExport = "/Users/secret/delivery/private-output.glb";
+    await Deno.writeTextFile(
+      interpreter,
+      "#!/bin/sh\n" +
+        "cat >/dev/null\n" +
+        `printf '%s\\n' ${
+          shellQuote(JSON.stringify({
+            ok: false,
+            error: `Export gltf to ${secretExport} failed: OSError`,
+            traceback: `Traceback includes ${secretExport}`,
+          }))
+        }\n`,
+      { mode: 0o700 },
+    );
+    Deno.env.set("BUILD123D_PYTHON_BIN", interpreter);
+    const exportDirectory = `${root}/delivery`;
+    await Deno.mkdir(exportDirectory);
+    const harnessAssembly = testAssembly(exportDirectory, `${root}/artifacts`);
+    const harnessPort = startOnFreePort();
+    const harnessHttp = await harnessAssembly.app.startHttp({
+      port: harnessPort,
+      onListen: () => {},
+    });
+    try {
+      const failedExport = await mcpRpc(harnessPort, "tools/call", {
+        name: "build123d_export",
+        arguments: {
+          script: "result = fixture",
+          formats: ["gltf"],
+          name: "private-output",
+        },
+      });
+      const result = failedExport.body.result as {
+        isError: boolean;
+        structuredContent: Record<string, unknown>;
+      };
+      assertEquals(result.isError, true);
+      assertEquals(result.structuredContent.code, "cad.execution_failed");
+      assertNoHostPath(failedExport.body, secretExport);
+    } finally {
+      await harnessHttp.shutdown();
+      await Deno.remove(root, { recursive: true });
+    }
+  } finally {
+    if (previousPython === undefined) Deno.env.delete("BUILD123D_PYTHON_BIN");
+    else Deno.env.set("BUILD123D_PYTHON_BIN", previousPython);
+  }
+});
+
+Deno.test("artifact storage failures never expose an absolute host path to MCP", async () => {
+  const root = await Deno.makeTempDir({ prefix: "mcp-build123d-path-safe-" });
+  const deliveryParent = `${root}/delivery-is-a-file`;
+  const deliveryPath = `${deliveryParent}/nested`;
+  await Deno.writeTextFile(deliveryParent, "not a directory");
+  const assembly = testAssembly(deliveryPath, `${root}/artifacts`);
+  const port = startOnFreePort();
+  const http = await assembly.app.startHttp({ port, onListen: () => {} });
+  try {
+    const response = await mcpRpc(port, "tools/call", {
+      name: "build123d_export",
+      arguments: {
+        script: "result = 42",
+        formats: ["step"],
+        name: "path-safe",
+      },
+    });
+    const result = response.body.result as {
+      isError: boolean;
+      structuredContent: Record<string, unknown>;
+      content: Array<{ text: string }>;
+    };
+    assertEquals(result.isError, true);
+    assertEquals(result.structuredContent.code, "artifact.store_unavailable");
+    assertEquals(JSON.stringify(result).includes(root), false);
+    assertEquals(result.content[0].text.includes(root), false);
+  } finally {
+    await http.shutdown();
+    await Deno.remove(root, { recursive: true });
+  }
+});
+
+Deno.test("wire schemas reject invalid requests without echoing host paths", async () => {
+  const assembly = testAssembly();
+  const port = startOnFreePort();
+  const http = await assembly.app.startHttp({ port, onListen: () => {} });
+  try {
+    const extra = await mcpRpc(port, "tools/call", {
+      name: "build123d_execute",
+      arguments: { script: "result = 1", "/Users/secret/request": true },
+    });
+    const extraResult = extra.body.result as {
+      isError: boolean;
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(extraResult.isError, true);
+    assertEquals(
+      extraResult.structuredContent.code,
+      "request.invalid_arguments",
+    );
+    assertNoHostPath(extra.body, "/Users/secret/request");
+
+    const invalidFormats = await mcpRpc(port, "tools/call", {
+      name: "build123d_export",
+      arguments: { script: "result = 1", formats: ["step", "step"], name: "x" },
+    });
+    const formatsResult = invalidFormats.body.result as {
+      isError: boolean;
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(formatsResult.isError, true);
+    assertEquals(
+      formatsResult.structuredContent.code,
+      "request.invalid_arguments",
+    );
+  } finally {
+    await http.shutdown();
+  }
+});
+
+Deno.test("the result viewer is the only registered viewer and loads from its published path", async () => {
   const seen: string[] = [];
   const remote = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen: () => {} },
@@ -313,159 +659,40 @@ Deno.test("build123d result viewer reads the exact published remote bundle path"
   try {
     const assembly = createCadMcpApp({
       viewerModuleUrl:
-        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.5.0/server.ts`,
+        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.5.1/server.ts`,
     });
     assertEquals(assembly.viewers, {
-      registered: ["results-viewer", "artifact-helper-viewer"],
+      registered: ["results-viewer"],
       skipped: [],
     });
     assertStringIncludes(
       (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))?.text ?? "",
       "published CAD result",
     );
-    assertStringIncludes(
-      (await assembly.app.readResourceContent(ARTIFACT_HELPER_VIEWER_URI))
-        ?.text ?? "",
-      "published CAD result",
-    );
     assertEquals(seen, [
-      "/@casys/mcp-build123d/0.5.0/src/ui/dist/results-viewer/index.html",
-      "/@casys/mcp-build123d/0.5.0/src/ui/dist/artifact-helper-viewer/index.html",
+      "/@casys/mcp-build123d/0.5.1/src/ui/dist/results-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();
   }
 });
 
-Deno.test("build123d result viewer is registered when its HTML bundle exists", async () => {
-  const html = "<!doctype html><title>CAD result</title>";
-  const assembly = createCadMcpApp({
-    viewerModuleUrl: "file:///project/server.ts",
-    viewerFilesystem: {
-      exists: (path) =>
-        path === "/project/src/ui/dist/results-viewer/index.html",
-      readFile: (path) => {
-        assertEquals(path, "/project/src/ui/dist/results-viewer/index.html");
-        return html;
-      },
-    },
-  });
-
-  assertEquals(assembly.viewers, {
-    registered: ["results-viewer"],
-    skipped: ["artifact-helper-viewer"],
-  });
-  assertEquals(assembly.app.getToolCount(), 4);
-  assertEquals(assembly.app.hasResource(RESULTS_VIEWER_URI), true);
-  assertEquals(
-    (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))?.text,
-    html,
-  );
-});
-
-Deno.test("build123d ships the generated standalone results viewer", async () => {
+Deno.test("the generated result viewer uses resources/read instead of a private tool", async () => {
   const assembly = createCadMcpApp();
   assertEquals(assembly.viewers, {
-    registered: ["results-viewer", "artifact-helper-viewer"],
+    registered: ["results-viewer"],
     skipped: [],
   });
-  const html = (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))
-    ?.text ?? "";
+  const html =
+    (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))?.text ?? "";
   assertStringIncludes(html, "build123d-results-viewer");
-  const helperHtml = (await assembly.app.readResourceContent(
-    ARTIFACT_HELPER_VIEWER_URI,
-  ))?.text ?? "";
-  assertStringIncludes(helperHtml, "build123d-artifact-helper-viewer");
-  assertEquals(helperHtml.includes("build123d.geometry-status"), false);
-  assertEquals(helperHtml.includes("build123d.geometry-canvas"), false);
-  assertStringIncludes(html, "io.casys.mcp.view-components/v1");
-  assertStringIncludes(html, "build123d.geometry-status");
-  assertStringIncludes(html, "build123d.geometry-metrics");
-  assertStringIncludes(html, "build123d.geometry-canvas");
-  assertStringIncludes(html, "build123d.export-artifacts");
-  assertStringIncludes(html, "expected_sha256");
-  assertEquals(helperHtml.includes("expected_sha256"), false);
-  assertEquals(html.includes("io.casys.mcp.composable-view/v1"), false);
-  assertEquals(html.includes("build123d-glance"), false);
-  assertEquals(html.includes("__BUILD123D_VIEWER_BUNDLE__"), false);
+  assertStringIncludes(html, "readServerResource");
+  assertEquals(html.includes("build123d_export_read"), false);
   assertEquals(/<script[^>]+src=/i.test(html), false);
 });
 
-Deno.test("build123d result viewer is skipped before its bundle is built", () => {
-  const assembly = createCadMcpApp({
-    viewerModuleUrl: "file:///project/server.ts",
-    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
-  });
-
-  assertEquals(assembly.viewers, {
-    registered: [],
-    skipped: ["results-viewer", "artifact-helper-viewer"],
-  });
-  assertEquals(assembly.app.hasResource(RESULTS_VIEWER_URI), false);
-});
-
-Deno.test("build123d input schemas reject extra properties and invalid bounds on the wire", async () => {
-  const assembly = createCadMcpApp({
-    viewerModuleUrl: "file:///project/server.ts",
-    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
-  });
-  const port = startOnFreePort();
-  const http = await assembly.app.startHttp({ port, onListen: () => {} });
-  try {
-    const extra = await mcpRpc(port, "tools/call", {
-      name: "build123d_execute",
-      arguments: { script: "result = 1", unexpected: true },
-    });
-    assertEquals(extra.body.result, undefined);
-    assertStringIncludes(JSON.stringify(extra.body.error), "unexpected");
-
-    const emptyFormats = await mcpRpc(port, "tools/call", {
-      name: "build123d_export",
-      arguments: { script: "result = 1", formats: [], name: "bracket" },
-    });
-    assertEquals(emptyFormats.body.result, undefined);
-    assertStringIncludes(JSON.stringify(emptyFormats.body.error), "formats");
-
-    const duplicateFormats = await mcpRpc(port, "tools/call", {
-      name: "build123d_export",
-      arguments: {
-        script: "result = 1",
-        formats: ["step", "step"],
-        name: "bracket",
-      },
-    });
-    assertEquals(duplicateFormats.body.result, undefined);
-    assertStringIncludes(
-      JSON.stringify(duplicateFormats.body.error),
-      "duplicate",
-    );
-
-    const zeroDensity = await mcpRpc(port, "tools/call", {
-      name: "build123d_execute",
-      arguments: { script: "result = 1", density_kg_m3: 0 },
-    });
-    assertEquals(zeroDensity.body.result, undefined);
-    assertStringIncludes(JSON.stringify(zeroDensity.body.error), "must be > 0");
-
-    const fractionalTimeout = await mcpRpc(port, "tools/call", {
-      name: "build123d_execute",
-      arguments: { script: "result = 1", timeout_ms: 1.5 },
-    });
-    assertEquals(fractionalTimeout.body.result, undefined);
-    assertStringIncludes(
-      JSON.stringify(fractionalTimeout.body.error),
-      "integer",
-    );
-  } finally {
-    await http.shutdown();
-  }
-});
-
-Deno.test("assembly-integrity HTTP cap admits a legal-size inline artifact envelope", async () => {
-  const assembly = createCadMcpApp({
-    viewerModuleUrl: "file:///project/server.ts",
-    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
-  });
+Deno.test("assembly-integrity accepts a legal-size inline envelope through the HTTP cap", async () => {
+  const assembly = testAssembly();
   const port = startOnFreePort();
   const http = await assembly.app.startHttp({
     port,
@@ -473,10 +700,6 @@ Deno.test("assembly-integrity HTTP cap admits a legal-size inline artifact envel
     onListen: () => {},
   });
   try {
-    // 1 MiB crosses the generic server default. It is structurally valid
-    // base64; the deliberately wrong digest proves the request reached the
-    // observer bridge rather than being rejected as HTTP 413.
-    const blob = "A".repeat(1_048_576);
     const response = await mcpRpc(port, "tools/call", {
       name: "build123d_observe_assembly_integrity",
       arguments: {
@@ -484,79 +707,37 @@ Deno.test("assembly-integrity HTTP cap admits a legal-size inline artifact envel
           mimeType: "model/step",
           sha256: "0".repeat(64),
           bytes: 786_432,
-          blob,
+          blob: "A".repeat(1_048_576),
         },
       },
     });
     assertEquals(response.status === 413, false);
-    assertStringIncludes(JSON.stringify(response.body.error), "sha256");
+    const result = response.body.result as {
+      isError: boolean;
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(result.isError, true);
+    assertEquals(
+      result.structuredContent.code,
+      "assembly_integrity.input_invalid",
+    );
+    assertEquals(result.structuredContent.retryable, false);
   } finally {
     await http.shutdown();
   }
 });
 
-Deno.test("build123d_export_read tools/call requires expected_sha256 on the app-only wire", async () => {
-  const dir = await Deno.makeTempDir({ prefix: "cad-wire-glb-" });
-  Deno.env.set("BUILD123D_EXPORT_DIR", dir);
-  const assembly = createCadMcpApp({
-    viewerModuleUrl: "file:///project/server.ts",
-    viewerFilesystem: { exists: () => false, readFile: () => "unreachable" },
-  });
-  const port = startOnFreePort();
-  const http = await assembly.app.startHttp({ port, onListen: () => {} });
-  try {
-    const bytes = new Uint8Array([
-      0x67,
-      0x6c,
-      0x54,
-      0x46,
-      2,
-      0,
-      0,
-      0,
-      12,
-      0,
-      0,
-      0,
-    ]);
-    await Deno.writeFile(`${dir}/assembly.glb`, bytes);
-    const digest = await sha256Hex(bytes);
-
-    const listed = await mcpRpc(port, "tools/list");
-    const tools = (listed.body.result as { tools: Array<{ name: string }> })
-      .tools;
-    assertEquals(
-      tools.map((tool) => tool.name).includes("build123d_export_read"),
-      false,
-    );
-
-    const missing = await mcpRpc(port, "tools/call", {
-      name: "build123d_export_read",
-      arguments: { name: "assembly.glb" },
-    });
-    assertEquals(missing.body.result, undefined);
-    assertStringIncludes(JSON.stringify(missing.body.error), "expected_sha256");
-
-    const accepted = await mcpRpc(port, "tools/call", {
-      name: "build123d_export_read",
-      arguments: {
-        name: "assembly.glb",
-        expected_sha256: digest,
-      },
-    });
-    const acceptedResult = accepted.body.result as {
-      structuredContent: {
-        name: string;
-        kind: string;
-        bytes: number;
-      };
-    };
-    assertEquals(acceptedResult.structuredContent.name, "assembly.glb");
-    assertEquals(acceptedResult.structuredContent.kind, "gltf-binary");
-    assertEquals(acceptedResult.structuredContent.bytes, bytes.length);
-  } finally {
-    await http.shutdown();
-    Deno.env.delete("BUILD123D_EXPORT_DIR");
-    await Deno.remove(dir, { recursive: true });
-  }
+Deno.test("assembly-integrity observer failures are structured and non-retryable", () => {
+  const result = build123dToolErrorResult(
+    "build123d_observe_assembly_integrity",
+    new AssemblyIntegrityObservationError(
+      "Fixed observer could not inspect the STEP bytes.",
+    ),
+  );
+  assertEquals(result.isError, true);
+  assertEquals(
+    result.structuredContent.code,
+    "assembly_integrity.observation_failed",
+  );
+  assertEquals(result.structuredContent.retryable, false);
 });

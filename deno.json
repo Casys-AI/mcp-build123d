@@ -1,13 +1,19 @@
 {
   "name": "@casys/mcp-build123d",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "tasks": {
     "serve": "deno run --allow-all server.ts --port=3014",
+    "serve:stdio": "deno run --allow-all server.ts --stdio",
     "compile": "deno compile -A --output mcp-build123d server.ts",
     "test": "deno test --allow-all tests/",
     "build:ui": "deno run --allow-env --allow-net --allow-read --allow-run --allow-write scripts/build-results-viewer.ts",
     "generate:harness-source": "deno run --allow-read --allow-write scripts/generate-harness-source.ts && deno fmt src/api/harness-source.ts",
     "generate:assembly-integrity-harness-source": "deno run --allow-read --allow-write scripts/generate-assembly-integrity-harness-source.ts && deno fmt src/api/assembly-integrity-harness-source.ts"
+  },
+  "fmt": {
+    "exclude": [
+      "src/ui/dist/"
+    ]
   },
   "exports": {
     ".": "./mod.ts",
@@ -26,6 +32,9 @@
       "src/api/harness.py",
       "src/api/assembly-integrity-harness.py",
       "README.md",
+      "CHANGELOG.md",
+      "CITATION.cff",
+      "SECURITY.md",
       "LICENSE"
     ],
     "exclude": [
@@ -35,7 +44,7 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.24.1",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.26.1",
     "ajv": "npm:ajv@^8.17.1",
     "hono": "npm:hono@^4",
     "hono/cors": "npm:hono@^4/cors",

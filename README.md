@@ -7,17 +7,22 @@
 Turn a [build123d](https://github.com/gumyr/build123d) Python model into
 measured CAD and verifiable export artifacts through MCP. Agent-facing
 operations execute a parametric model, report OCCT geometry metrics, and export
-STEP, STL, or GLB. The bundled MCP App adds interactive 3D inspection without
-putting binary model data in the agent-facing result.
+STEP, STL, or GLB. Every export is promoted into a server-owned, immutable MCP
+resource addressed by its SHA-256; agents receive the resource URI, MIME type,
+size, and digest—not a host path.
 
 ```
 agent writes build123d script
         │
    build123d_execute ──► volume, area, centroid, bbox, topology
         │
-   build123d_export  ──► part.step   → FEA meshing (Gmsh, CalculiX), other CAD
-                   part.stl    → 3D printing
-                   part.glb    → 3D viewers
+   build123d_export  ──► private delivery staging
+        │
+        └──────────────► casys://build123d/artifacts/<sha256>.step → FEA/CAD
+                          casys://build123d/artifacts/<sha256>.stl  → printing
+                          casys://build123d/artifacts/<sha256>.glb  → viewers
+                                      │
+                               resources/read (rehashes bytes)
 
 exact STEP bytes ──► build123d_observe_assembly_integrity ──► factual XCAF/OCCT assembly observation
 ```
@@ -28,7 +33,9 @@ At a glance:
   holes, fillets, chamfers, patterns, and compounds can use the normal build123d
   API installed with the selected Python interpreter.
 - STEP preserves the BREP, while STL and GLB are tessellated delivery formats.
-- Every exported file includes its exact byte count and SHA-256 digest.
+- Every export returns an immutable resource URI with exact MIME type, byte
+  count, and SHA-256 digest. `resources/read` rehashes the issued in-memory
+  bytes before returning them.
 - Mass is reported only from an explicit uniform density. No material or density
   is guessed.
 - `build123d_observe_assembly_integrity` accepts one bounded, digest-bound STEP
@@ -40,9 +47,10 @@ At a glance:
 An agent doesn't click — it writes. With a GUI CAD's API, building geometry
 means one HTTP call per feature against a stateful document. With build123d,
 **the script is the artifact**: generated in one shot, versionable, diffable,
-replayable in a pinned Python/build123d environment, and carrying its own
-traceability (the SysML element or requirement that motivated a dimension can
-live in the code, as a comment or a variable name).
+replayable with a pinned build123d package and a configured execution
+environment, and carrying its own traceability (the SysML element or requirement
+that motivated a dimension can live in the code, as a comment or a variable
+name).
 
 The metrics are not estimates. Volume, surface area, center of mass and bounding
 box come analytically from the BREP kernel rather than from the STL or GLB
@@ -52,8 +60,11 @@ tessellation.
 
 ### Run a source checkout
 
-Requirements are Deno 2.x and Python 3.10+ with build123d. A virtual environment
-keeps the OCCT dependency isolated from the system Python:
+Requirements are Deno 2.x and Python 3.10+ with build123d. Immutable export
+promotion uses POSIX directory-descriptor safeguards, so this release supports
+that promotion on macOS and Linux; an unsupported host refuses promotion rather
+than weakening containment. A virtual environment keeps the OCCT dependency
+isolated from the system Python:
 
 ```bash
 git clone https://github.com/Casys-AI/mcp-build123d.git
@@ -71,15 +82,39 @@ The server binds to loopback and exposes Streamable HTTP at
 curl http://127.0.0.1:3014/health
 ```
 
+The same source checkout also runs as native stdio, with the identical tool,
+resource, viewer, and error contracts:
+
+```bash
+BUILD123D_PYTHON_BIN="$PWD/.venv/bin/python" deno task serve:stdio
+```
+
+For example, a checkout-backed stdio entry is:
+
+```json
+{
+  "mcpServers": {
+    "build123d": {
+      "command": "deno",
+      "args": [
+        "run",
+        "-A",
+        "/absolute/path/to/mcp-build123d/server.ts",
+        "--stdio"
+      ]
+    }
+  }
+}
+```
+
 ### Run the published package
 
-This checkout prepares unpublished `0.5.0`. The currently published JSR package
-remains `0.4.1` and can be started directly; Python and build123d are still host
-dependencies:
+The published JSR package `0.5.1` can be started directly; Python and build123d
+are still host dependencies:
 
 ```bash
 BUILD123D_PYTHON_BIN="$PWD/.venv/bin/python" \
-  deno run -A jsr:@casys/mcp-build123d@0.4.1/server --port=3014
+  deno run -A jsr:@casys/mcp-build123d@0.5.1/server --port=3014
 ```
 
 `-A` is intentional here: the public tools run arbitrary Python and write
@@ -100,17 +135,19 @@ file location depends on the host; the connection entry is typically:
 }
 ```
 
-This release is HTTP-only. It does not implement stdio, so a client
-configuration with `command` and `args` will not work. HTTP binds to `127.0.0.1`
-by default; `--hostname=0.0.0.0` is an explicit network exposure.
+HTTP binds to `127.0.0.1` by default; `--hostname=0.0.0.0` is an explicit
+network exposure. The `0.5.1` checkout supports native stdio and the
+digest-bound resource contract described below.
 
 ### Run the published engineering toolchain image
 
 This repository does not publish a dedicated `mcp-build123d` image. Casys does
-publish release `0.4.1` in the broader
+publish the historical `0.4.1` server in the broader
 [`engineering-toolchain`](https://github.com/Casys-AI/engineering-toolchain)
-image, with Python, build123d 0.11.1, and OCCT already installed. Start its
-`build123d` entrypoint directly while keeping exports on the host:
+image, with Python, build123d 0.11.1, and OCCT already installed. It remains a
+way to run the published HTTP server; it does not yet include this checkout's
+native stdio or immutable artifact-resource behavior. Start its `build123d`
+entrypoint directly while keeping the historical exports on the host:
 
 ```bash
 mkdir -p "$PWD/cad-exports"
@@ -124,7 +161,8 @@ docker run --rm \
 ### Build a checkout locally
 
 For a dedicated local image built from this checkout, save the following as
-`Dockerfile.local`. It keeps Python, OCCT, Deno, and exports together:
+`Dockerfile.local`. It keeps Python, the resolver-selected OCCT dependency,
+Deno, and exports together:
 
 ```dockerfile
 FROM denoland/deno:debian-2.9.2
@@ -167,11 +205,16 @@ Consequences:
 - Only expose this server to callers you trust with shell-equivalent access.
 - `build123d_export`'s managed outputs are confined to `BUILD123D_EXPORT_DIR`:
   file names are reduced to a safe basename (directory components stripped,
-  extension imposed by the format). The submitted Python is not confined by that
+  extension imposed by the format). Those mutable delivery paths are verified,
+  then copied into the server process's immutable resource memory; they are
+  never a `resources/read` surface. The submitted Python is not confined by that
   output-path rule and can do anything Python can.
-- Loopback binding, safe export names, timeouts, and the bounded GLB reader are
-  useful controls; none of them isolates the Python process. Put untrusted code
-  behind a real sandbox with no secrets, network, or sensitive mounts.
+- Promotion reads delivery bytes through a short-lived isolated reader with a
+  fixed five-second deadline. A special file or post-check staging swap fails
+  closed; it cannot indefinitely block artifact issuance.
+- Loopback binding, safe export names, content-addressed resources, and timeouts
+  are useful controls; none of them isolates the Python process. Put untrusted
+  code behind a real sandbox with no secrets, network, or sensitive mounts.
 - HTTP authentication is not enabled by this bootstrap. Keep it on loopback or
   add an authenticated deployment boundary before exposing it to a network.
 
@@ -215,32 +258,28 @@ script or file contents:
 }
 ```
 
-`kind: "export"` uses the same metrics and reports each generated file's format,
-path, byte size and SHA-256. A GLB also carries a bounded viewer reference; the
-viewer must pass that file's `sha256` as `expected_sha256` when it calls the
-app-only reader:
+`kind: "export"` uses the same metrics and returns one immutable artifact
+reference per requested format:
 
 ```json
 {
   "format": "gltf",
-  "path": "/exports/assembly.glb",
-  "bytes": 204800,
-  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "viewer": {
-    "toolName": "build123d_export_read",
-    "name": "assembly.glb"
+  "artifact": {
+    "schemaVersion": "build123d-export-artifact/1.0",
+    "uri": "casys://build123d/artifacts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.glb",
+    "format": "gltf",
+    "mimeType": "model/gltf-binary",
+    "bytes": 204800,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   }
 }
 ```
 
-The interactive industrial CAD view supports orbit, pan, zoom, fit, reset and
-wireframe inspection. `build123d_export_read` is visible only to MCP Apps. It
-accepts a basename and the exact `files[].sha256` digest rather than a path,
-resolves the real file under `BUILD123D_EXPORT_DIR`, rejects symlink escapes and
-digest mismatches, validates the GLB header and returns a versioned
-`model/gltf-binary` base64 envelope. The export path is mutable: a later export
-with the same basename can replace the file, and a read using a stale digest is
-rejected.
+Read exactly the returned `artifact.uri` with MCP `resources/read`. The server
+does not accept a path parameter, and rehashes its issued in-memory byte copy
+before returning it. The bundled viewer follows the same resource path, checks
+the GLB header and digest, then provides orbit, pan, zoom, fit, reset, and
+wireframe inspection.
 
 ### Compose components
 
@@ -254,26 +293,27 @@ presentation primitives (`Card`, `Badge`, `MetricGrid`, `KeyValueList`,
 `DataTable`, `Button`, `Toolbar` and system states). The local stylesheet owns
 only the Three.js viewport and CAD-specific responsive layout.
 
-| Component key                | Real data and behaviour                                       |
-| ---------------------------- | ------------------------------------------------------------- |
-| `build123d.geometry-status`  | computation/export status and available file identity         |
-| `build123d.geometry-metrics` | OCCT metrics, topology, optional mass and density             |
-| `build123d.geometry-canvas`  | bounded GLB fetch plus interactive Three.js scene and cleanup |
-| `build123d.export-artifacts` | exact generated formats, paths and byte sizes                 |
+| Component key                | Real data and behaviour                                           |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `build123d.geometry-status`  | computation/export status and SHA-256 artifact identity           |
+| `build123d.geometry-metrics` | OCCT metrics, topology, optional mass and density                 |
+| `build123d.geometry-canvas`  | verified GLB resource plus interactive Three.js scene and cleanup |
+| `build123d.export-artifacts` | immutable resource URIs, digests, MIME types and byte sizes       |
 
-The app-only GLB reader is bound to the non-composable
-`ui://mcp-build123d/artifact-helper-viewer`, so its binary envelope cannot be
-mistaken for a geometry component surface. Repeating a canvas component is
-supported: controls and Three.js cleanup are scoped to each surface instance.
+Repeating a canvas component is supported: controls and Three.js cleanup are
+scoped to each surface instance. A resource URI identifies exact bytes; it does
+not establish stable feature, face, instance, motion, fit, or requirement
+semantics.
 
 No Compose event is emitted or accepted yet. Geometry selection would be a
 meaningful future event only once the result contract exposes stable shape or
 face identifiers; emitting a generic click today would invent semantics.
 
-This inline base64 transport is deliberately an MVP for dashboard-sized models:
-8 MiB by default (roughly 10.7 MiB before the surrounding JSON), with a 24 MiB
-hard ceiling. Large assemblies should move to a future stable artifact URI read
-through `resources/read`, rather than increasing conversational payloads.
+The resource metadata lets a host decide whether to fetch a large delivery
+artifact. The bundled GLB viewer has a 24 MiB local safety cap; resource
+identity and retrieval remain available separately for larger artifacts. The
+server does not invent an assembly manifest: a compound export is one aggregate
+shape unless a future, independently evidenced instance contract is introduced.
 
 ### Build the viewer
 
@@ -292,7 +332,10 @@ The build retains Deno's dependency-age quarantine for the rest of the graph and
 exempts only the exact Casys-owned mcp-view release. The generated HTML contains
 no module path or runtime network dependency. The viewer accepts only the
 structured result envelopes documented above; it never runs a script and can
-read only the GLB basename explicitly returned by `build123d_export`.
+read only the exact GLB resource URI explicitly returned by `build123d_export`.
+`src/ui/dist/` is generated bundle output and is intentionally excluded from
+Deno source formatting; the viewer source remains covered by the normal format
+check.
 
 ### Script and geometry contract
 
@@ -362,15 +405,17 @@ assemblies need to be evaluated per material outside this contract.
 
 ### `build123d_export`
 
-Every entry in `files[]` contains `format`, `path`, `bytes`, and `sha256`.
-`sha256` identifies the exact bytes written by that export; downstream tools
-should copy the file, recompute the digest on their private snapshot, and reject
-an `expected_step_sha256` mismatch before processing it.
+Every entry in `files[]` contains `format` and an `artifact` object with a
+content-addressed `uri`, MIME type, byte size, and SHA-256. The tool writes into
+private managed delivery staging, verifies the bridge-reported bytes, then
+issues a process-local immutable resource copy. Downstream tools should use
+`resources/read` on that exact URI and recompute the digest on their own copy
+when retaining evidence.
 
 Same execution, plus files. `formats`: `step` (exact BREP), `stl` (mesh), `gltf`
-(binary `.glb`). Files land under `BUILD123D_EXPORT_DIR` (default
-`./cad-exports`); the response returns paths and sizes, along with the same
-metrics.
+(binary `.glb`). `BUILD123D_EXPORT_DIR` is mutable staging (default
+`./cad-exports`); it is not an agent-readable interface. The response returns
+only immutable artifact references alongside the same metrics.
 
 Example tool input using the script above:
 
@@ -412,7 +457,7 @@ exact input identity, fixed method, and a closed producer block:
 {
   "producer": {
     "service": "mcp-build123d",
-    "packageVersion": "0.5.0",
+    "packageVersion": "0.5.1",
     "tool": "build123d_observe_assembly_integrity",
     "engine": { "name": "cadquery-ocp", "version": "7.9.3.1" }
   }
@@ -437,48 +482,60 @@ attestation; the fixed method still describes the OCCT/XCAF observation.
 
 - Each call runs the script once. `build123d_export` derives all requested
   formats and the reported metrics from that one in-memory result.
-- The server does not persist a run ledger or return the submitted script in
-  `structuredContent`. Version the source in your own repository or evidence
-  store when the script itself matters.
-- An export path is a mutable location. Reusing the same `name` can replace its
-  contents; `files[].sha256`, not the path, identifies the exact bytes returned
-  by that invocation. The app-only GLB reader requires that digest as
-  `expected_sha256` and hashes the bytes actually read before encoding them.
+- After that successful bridge result, the current server process holds a
+  direct-execution receipt alongside an immutable in-memory artifact copy. The
+  receipt binds source, request, metrics and output-set digests with literal
+  `not-admitted` status; it never stores submitted source text or crosses
+  `structuredContent`. Resources are deliberately not restored after restart:
+  any object or receipt prewritten on disk is ignored. This is not a Digital
+  Thread operation or admission ledger, and it does not make an artifact
+  canonical product geometry.
+- An export delivery path is mutable and private. Reusing a `name` can replace
+  staging bytes, but the returned `artifact.uri` is digest-bound and names the
+  immutable current-process copy. `resources/read` rehashes that copy before it
+  returns any bytes. Promotion uses a fixed five-second isolated read deadline,
+  so a special file or staging swap fails closed instead of stalling the
+  artifact queue. After a server restart, run a new export before reading an
+  artifact URI again.
 - `build123d_export` passes the UTC sentinel `1970-01-01T00:00:00Z` to
   build123d's native STEP `timestamp` parameter. That sentinel is a
-  reproducibility marker, not the execution or export time. Byte-for-byte STEP
-  identity is scoped to the pinned build123d 0.11.1 / OCCT environment; other
-  versions may still change export bytes.
+  reproducibility marker, not the execution or export time. This checkout pins
+  `build123d==0.11.1`, while its `cadquery-ocp-novtk` dependency is
+  resolver-selected within build123d's `>=7.9,<8` range. The exact resolved
+  OCP/OCCT binding is invocation-specific, so byte-for-byte STEP identity is
+  scoped to the actual resolved execution environment; other resolutions or
+  exporter versions may change bytes.
 - Digest equality proves byte equality, not geometric equivalence. Export bytes
   can change across build123d, OCCT, or exporter versions even when a shape is
   visually equivalent.
-- STEP and STL are files only in this release. GLB has a bounded, digest-bound
-  app-only reader for the viewer, but there is no general artifact resource or
-  download API.
+- STEP, STL, and GLB all use the same general artifact-resource contract.
+  Resource metadata contains the MIME type, size, SHA-256, format, and immutable
+  flag. No caller-controlled filesystem path is accepted by the resource reader.
 
 ## Environment Variables
 
-| Variable                   | Default         | Description                              |
-| -------------------------- | --------------- | ---------------------------------------- |
-| `BUILD123D_PYTHON_BIN`     | `python3`       | Python interpreter that has build123d    |
-| `BUILD123D_EXPORT_DIR`     | `./cad-exports` | Where `build123d_export` writes files    |
-| `BUILD123D_GLTF_MAX_BYTES` | `8388608`       | App payload limit; hard-capped at 24 MiB |
+| Variable               | Default         | Description                                            |
+| ---------------------- | --------------- | ------------------------------------------------------ |
+| `BUILD123D_PYTHON_BIN` | `python3`       | Python interpreter that has build123d                  |
+| `BUILD123D_EXPORT_DIR` | `./cad-exports` | Private mutable delivery staging for the Python bridge |
 
 ## Architecture
 
 ```
 mod.ts                  # Public API
-server.ts               # Stateless HTTP MCP server (port 3014)
+server.ts               # HTTP bootstrap or native stdio bootstrap
 src/
   api/
     harness.py          # Python side: exec script, compute metrics, export
     python-bridge.ts    # Deno side: subprocess, JSON over stdin/stdout
     assembly-integrity-harness.py # fixed OCCT/XCAF factual STEP observer
     assembly-integrity-bridge.ts  # digest-bound staging and receipt parser
+  artifacts.ts          # process-local digest-bound export resources and handlers
+  tool-errors.ts        # stable structured tool-error envelope
   tools/
-    execute.ts          # execute, export and app-only GLB reader
+    execute.ts          # execute and immutable artifact export
     assembly-integrity.ts # standalone factual assembly observation
-  ui/results-viewer/    # small CAD components plus non-composable GLB helper
+  ui/results-viewer/    # small CAD components and resource-backed GLB viewer
   client.ts             # CadToolsClient
 tests/                  # contract, wire, viewer and real build123d tests
 ```
@@ -493,13 +550,14 @@ selected host or in its container.
 In a standalone workflow, `build123d_execute`'s mass feeds
 `@casys/constraint-solver` (via `@casys/mcp-syson`'s
 `syson_constraint_evaluate`) to check a computed mass against a SysML mass
-budget — with units. `build123d_export`'s STEP file is the entry point for FEA
-meshing. Each link is a separate MCP server; the agent composes them.
+budget — with units. A STEP artifact read from `build123d_export` is the entry
+point for FEA meshing. Each link is a separate MCP server; the agent composes
+them.
 
 ## Development
 
 ```bash
-deno task test     # needs Python 3.10+ with build123d
+deno task test     # full CAD integration cases need Python 3.10+ with build123d
 deno check mod.ts server.ts
 ```
 

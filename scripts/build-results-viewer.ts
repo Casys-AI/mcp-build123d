@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-/** Build both viewer resources against one exact mcp-view implementation. */
+/** Build the result viewer against one exact mcp-view implementation. */
 
 import { dirname, fromFileUrl, join } from "@std/path";
 
@@ -17,7 +17,6 @@ const temporaryConfigDir = await Deno.makeTempDir({
 const importMap = join(temporaryConfigDir, "import-map.json");
 const builds = [
   { entry: "main.ts", viewer: "results-viewer" },
-  { entry: "artifact-main.ts", viewer: "artifact-helper-viewer" },
 ] as const;
 const bundles = new Map<string, string>();
 

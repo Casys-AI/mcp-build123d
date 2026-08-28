@@ -20,14 +20,18 @@ export interface GeometryMetrics {
 
 export interface ExportFile {
   format: "step" | "stl" | "gltf";
-  path: string;
+  artifact: ExportArtifact;
+}
+
+/** Immutable server-owned MCP resource returned by build123d_export. */
+export interface ExportArtifact {
+  schemaVersion: "build123d-export-artifact/1.0";
+  uri: string;
+  format: "step" | "stl" | "gltf";
+  mimeType: "model/step" | "model/stl" | "model/gltf-binary";
   bytes: number;
-  /** Lowercase SHA-256 of the exact exported bytes. */
+  /** Lowercase SHA-256 of the exact immutable bytes. */
   sha256: string;
-  viewer?: {
-    toolName: "build123d_export_read";
-    name: string;
-  };
 }
 
 export interface GeometryResult {
@@ -44,22 +48,6 @@ export type ParseGeometryResult =
 export type DecodeGltfArtifact =
   | { ok: true; value: Uint8Array }
   | { ok: false; error: string };
-
-export interface GltfViewerReadArguments {
-  name: string;
-  expected_sha256: string;
-}
-
-/** Bind the app-only GLB read to the exact exported `files[].sha256`. */
-export function gltfViewerReadArguments(
-  file: ExportFile,
-): GltfViewerReadArguments | undefined {
-  if (!file.viewer) return undefined;
-  return {
-    name: file.viewer.name,
-    expected_sha256: file.sha256,
-  };
-}
 
 const MAX_GLTF_ARTIFACT_BYTES = 24 * 1024 * 1024;
 
@@ -184,79 +172,106 @@ function files(value: unknown): ExportFile[] | string {
     ) {
       return `files[${index}].format is not supported`;
     }
-    if (typeof file.path !== "string") {
-      return `files[${index}].path must be a string`;
+    const artifact = record(file.artifact);
+    if (!artifact) return `files[${index}].artifact must be an object`;
+    if (artifact.schemaVersion !== "build123d-export-artifact/1.0") {
+      return `files[${index}].artifact has an unsupported schema version`;
     }
-    const bytes = number(file.bytes, `files[${index}].bytes`, true);
+    const uri = artifact.uri;
+    if (typeof uri !== "string") {
+      return `files[${index}].artifact.uri must be an immutable build123d resource URI`;
+    }
+    const resourceMatch =
+      /^casys:\/\/build123d\/artifacts\/([a-f0-9]{64})\.(step|stl|glb)$/
+        .exec(uri);
+    if (!resourceMatch) {
+      return `files[${index}].artifact.uri must be an immutable build123d resource URI`;
+    }
+    if (artifact.format !== file.format) {
+      return `files[${index}].artifact.format must match files[${index}].format`;
+    }
+    const expectedMime = file.format === "step"
+      ? "model/step"
+      : file.format === "stl"
+      ? "model/stl"
+      : "model/gltf-binary";
+    if (artifact.mimeType !== expectedMime) {
+      return `files[${index}].artifact.mimeType does not match its format`;
+    }
+    const bytes = number(
+      artifact.bytes,
+      `files[${index}].artifact.bytes`,
+      true,
+    );
     if (typeof bytes === "string") return bytes;
     if (
-      typeof file.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(file.sha256)
+      typeof artifact.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(artifact.sha256)
     ) {
-      return `files[${index}].sha256 must be a lowercase SHA-256 digest`;
+      return `files[${index}].artifact.sha256 must be a lowercase SHA-256 digest`;
     }
-    let viewer: ExportFile["viewer"];
-    if (file.viewer !== undefined) {
-      if (file.format !== "gltf") {
-        return `files[${index}].viewer is only valid for gltf exports`;
-      }
-      const source = record(file.viewer);
-      if (
-        !source || source.toolName !== "build123d_export_read" ||
-        typeof source.name !== "string" || source.name.length > 255 ||
-        !/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.glb$/.test(source.name)
-      ) {
-        return `files[${index}].viewer is not a valid GLB viewer reference`;
-      }
-      viewer = {
-        toolName: "build123d_export_read",
-        name: source.name,
-      };
+    const expectedExtension = file.format === "gltf" ? "glb" : file.format;
+    if (
+      resourceMatch[1] !== artifact.sha256 ||
+      resourceMatch[2] !== expectedExtension
+    ) {
+      return `files[${index}].artifact.uri must encode the declared digest and format`;
     }
     parsed.push({
       format: file.format,
-      path: file.path,
-      bytes,
-      sha256: file.sha256,
-      viewer,
+      artifact: {
+        schemaVersion: "build123d-export-artifact/1.0",
+        uri,
+        format: file.format,
+        mimeType: expectedMime,
+        bytes,
+        sha256: artifact.sha256,
+      },
     });
   }
   return parsed;
 }
 
-/** Validate, size-check and decode the app-only binary artifact envelope. */
-export function decodeGltfArtifact(value: unknown): DecodeGltfArtifact {
+/** Validate, size-check and decode an immutable GLB resource response. */
+export async function decodeGltfArtifact(
+  value: unknown,
+  expected: ExportArtifact,
+): Promise<DecodeGltfArtifact> {
   const source = record(value);
-  if (!source) return { ok: false, error: "GLB payload must be an object" };
-  if (source.schemaVersion !== "1.0" || source.kind !== "gltf-binary") {
-    return { ok: false, error: "Unsupported GLB artifact envelope" };
+  if (
+    !source || !Array.isArray(source.contents) || source.contents.length !== 1
+  ) {
+    return {
+      ok: false,
+      error: "GLB resource response must contain one artifact",
+    };
+  }
+  const content = record(source.contents[0]);
+  if (!content) return { ok: false, error: "GLB resource content is invalid" };
+  if (content.uri !== expected.uri) {
+    return {
+      ok: false,
+      error: "GLB resource URI does not match the export result",
+    };
+  }
+  if (content.mimeType !== "model/gltf-binary") {
+    return { ok: false, error: "GLB resource MIME type is invalid" };
   }
   if (
-    typeof source.name !== "string" ||
-    !/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.glb$/.test(source.name)
+    typeof content.blob !== "string" ||
+    content.blob.length > Math.ceil(MAX_GLTF_ARTIFACT_BYTES / 3) * 4 + 4 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(content.blob)
   ) {
-    return { ok: false, error: "GLB artifact name is invalid" };
-  }
-  if (source.mimeType !== "model/gltf-binary") {
-    return { ok: false, error: "GLB artifact MIME type is invalid" };
-  }
-  if (
-    typeof source.bytes !== "number" || !Number.isSafeInteger(source.bytes) ||
-    source.bytes < 12 || source.bytes > MAX_GLTF_ARTIFACT_BYTES
-  ) {
-    return { ok: false, error: "GLB artifact byte length is invalid" };
-  }
-  if (
-    typeof source.base64 !== "string" ||
-    source.base64.length > Math.ceil(MAX_GLTF_ARTIFACT_BYTES / 3) * 4 + 4 ||
-    !/^[a-zA-Z0-9+/]*={0,2}$/.test(source.base64)
-  ) {
-    return { ok: false, error: "GLB artifact base64 is invalid" };
+    return { ok: false, error: "GLB resource base64 is invalid" };
   }
   try {
-    const raw = atob(source.base64);
+    const raw = atob(content.blob);
     const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
-    if (bytes.length !== source.bytes) {
-      return { ok: false, error: "GLB artifact byte length does not match" };
+    if (
+      bytes.length !== expected.bytes || bytes.length < 12 ||
+      bytes.length > MAX_GLTF_ARTIFACT_BYTES
+    ) {
+      return { ok: false, error: "GLB resource byte length does not match" };
     }
     if (
       bytes[0] !== 0x67 || bytes[1] !== 0x6c || bytes[2] !== 0x54 ||
@@ -269,6 +284,14 @@ export function decodeGltfArtifact(value: unknown): DecodeGltfArtifact {
     }
     if (uint32le(bytes, 8) !== bytes.length) {
       return { ok: false, error: "GLB declared length does not match" };
+    }
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const sha256 = Array.from(
+      new Uint8Array(digest),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+    if (sha256 !== expected.sha256) {
+      return { ok: false, error: "GLB resource SHA-256 does not match" };
     }
     return { ok: true, value: bytes };
   } catch {

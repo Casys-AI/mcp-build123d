@@ -2,9 +2,7 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
-## [0.5.0] - Unreleased
-
-This checkout prepares 0.5.0; it is not published.
+## [0.5.1] - 2026-08-28
 
 - **Fixed STEP-only assembly observation.**
   `build123d_observe_assembly_integrity` accepts one digest-bound, bounded,
@@ -23,17 +21,40 @@ This checkout prepares 0.5.0; it is not published.
 - **Native deterministic STEP timestamps.** `build123d_export` passes the UTC
   sentinel `1970-01-01T00:00:00Z` to build123d 0.11.1's native
   `export_step(..., timestamp=)` parameter. That sentinel is a reproducibility
-  marker, not the execution or export time. Byte-for-byte STEP identity remains
-  scoped to the pinned build123d 0.11.1 / OCCT environment.
-- **Digest-bound GLB viewer reads.** `build123d_export_read` requires
-  `expected_sha256` matching the export's `files[].sha256`; the results viewer
-  passes that digest. A later export at the same basename with different bytes
-  is rejected.
+  marker, not the execution or export time. CI pins build123d 0.11.1, while its
+  `cadquery-ocp-novtk` dependency remains resolver-selected in build123d's
+  `>=7.9,<8` range; exact OCP/OCCT identity is invocation-specific.
+- **Native stdio and HTTP share one application factory.** `server.ts --stdio`
+  uses `McpApp.start()` while HTTP keeps the stateless endpoint; both expose the
+  same instructions, tool annotations, structured errors, viewers and resource
+  registry.
+- **Immutable export resources.** STEP, STL and GLB delivery bytes are verified
+  against the Python bridge, copied into current-process memory, and returned as
+  `casys://build123d/artifacts/<sha256>.<ext>` references with MIME type, size
+  and SHA-256. `resources/read` rehashes the exact issued bytes. The receipt
+  binds source, request, metrics and output-set digests with literal
+  `not-admitted` status, but nothing is restored from disk after a restart: a
+  preseeded object or receipt is ignored. This is not a Digital Thread operation
+  or admission ledger. Delivery promotion uses a fixed five-second isolated read
+  deadline, so a special file or post-check swap fails closed without blocking
+  the artifact queue. The old app-only GLB reader is removed. Promotion requires
+  POSIX directory-descriptor safeguards and refuses unsupported hosts rather
+  than weakening containment.
+- **Agent-oriented contracts.** Execution, export and fixed assembly-observation
+  tools carry behavioral annotations, the server gives concise operational
+  instructions, and runner, artifact or assembly-observation failures return a
+  versioned `build123d-tool-error/1.0` payload with recovery guidance.
 - **Hardened tool input schemas.** `additionalProperties: false` on
   `build123d_execute` and `build123d_export`; `formats` is a unique 1–3 list;
-  `density_kg_m3` is strictly positive; `timeout_ms` is an integer ≥ 1; export
-  `name` is capped at 251 characters so `"<name>.glb"` stays within 255.
+  `density_kg_m3` is strictly positive; `timeout_ms` is an integer from 1 to
+  60000; export `name` is capped at 251 characters so `"<name>.glb"` stays
+  within 255.
 - **CI** installs `build123d==0.11.1`.
+
+## [0.5.0] - 2026-08-25
+
+- Published JSR package. Its immutable package contents differ from this `0.5.1`
+  candidate; use JSR when the exact `0.5.0` release is required.
 
 ## [0.4.1] - 2026-08-02
 
