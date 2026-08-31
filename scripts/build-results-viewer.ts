@@ -2,15 +2,25 @@
 /** Build the result viewer against one exact mcp-view implementation. */
 
 import { dirname, fromFileUrl, join } from "@std/path";
+import { requireAuditedViewerSplitModules } from "../src/ui/viewer-build-config.ts";
 
 const here = dirname(fromFileUrl(import.meta.url));
 const viewer = join(here, "..", "src", "ui", "results-viewer");
-const mcpViewModule = Deno.env.get("MCP_VIEW_MODULE") ??
-  "jsr:@casys/mcp-view@0.7.0";
-const mcpViewPreactModule = Deno.env.get("MCP_VIEW_PREACT_MODULE") ??
+const auditedModules = requireAuditedViewerSplitModules(Deno.env);
+const mcpViewModule = auditedModules.core;
+const mcpViewComponentsModule = auditedModules.components;
+const mcpViewComponentsPreactModule = Deno.env.get(
+  "MCP_VIEW_COMPONENTS_PREACT_MODULE",
+) ?? (mcpViewComponentsModule.startsWith("jsr:")
+  ? `${mcpViewComponentsModule}/preact`
+  : mcpViewComponentsModule.replace(/(?:mod|index)\.tsx?$/, "preact.ts"));
+const mcpViewContractsModule = Deno.env.get("MCP_VIEW_CONTRACTS_MODULE") ??
   (mcpViewModule.startsWith("jsr:")
-    ? `${mcpViewModule}/preact`
-    : mcpViewModule.replace(/(?:mod|index)\.tsx?$/, "preact.ts"));
+    ? "jsr:@casys/mcp-view-contracts@0.1.0"
+    : mcpViewModule.replace(
+      /\/view\/(?:mod|index)\.tsx?$/,
+      "/view-contracts/mod.ts",
+    ));
 const temporaryConfigDir = await Deno.makeTempDir({
   prefix: "mcp-build123d-view-",
 });
@@ -32,11 +42,17 @@ try {
       // exact Casys package audited and published with this viewer work.
       minimumDependencyAge: {
         age: "P1D",
-        exclude: ["jsr:@casys/mcp-view"],
+        exclude: [
+          "jsr:@casys/mcp-view",
+          "jsr:@casys/mcp-view-components",
+          "jsr:@casys/mcp-view-contracts",
+        ],
       },
       imports: {
         "@casys/mcp-view": mcpViewModule,
-        "@casys/mcp-view/preact": mcpViewPreactModule,
+        "@casys/mcp-view-components": mcpViewComponentsModule,
+        "@casys/mcp-view-components/preact": mcpViewComponentsPreactModule,
+        "@casys/mcp-view-contracts": mcpViewContractsModule,
         "@modelcontextprotocol/ext-apps":
           "npm:@modelcontextprotocol/ext-apps@^1.7.4",
         "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",

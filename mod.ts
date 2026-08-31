@@ -63,6 +63,46 @@ export {
   assemblyIntegrityTools,
 } from "./src/tools/assembly-integrity.ts";
 export { RESULTS_VIEWER_URI } from "./src/ui/constants.ts";
+export {
+  BUILD123D_CANONICAL_GEOMETRY_TOOL,
+  BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA,
+  BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
+  parseBuild123dGeometryReviewSession,
+  parseBuild123dRecordedViewSession,
+  parseBuild123dViewerSession,
+  VIEWER_SESSION_APPLY_ACTION,
+} from "./src/ui/recorded-view-session.ts";
+export type {
+  Build123dCanonicalCaptureProvenance,
+  Build123dGeometryReviewAnchor,
+  Build123dGeometryReviewBasis,
+  Build123dGeometryReviewProvenance,
+  Build123dGeometryReviewSession,
+  Build123dRecordedGeometryProjection,
+  Build123dRecordedGltfArtifact,
+  Build123dRecordedProducer,
+  Build123dRecordedResourceReader,
+  Build123dRecordedResourceResponse,
+  Build123dRecordedViewAnchor,
+  Build123dRecordedViewBasis,
+  Build123dRecordedViewProvenance,
+  Build123dRecordedViewSession,
+  Build123dViewerSession,
+  ParseBuild123dGeometryReviewSession,
+  ParseBuild123dRecordedViewSession,
+  ParseBuild123dViewerSession,
+} from "./src/ui/recorded-view-session.ts";
+export {
+  BUILD123D_GEOMETRY_RESULT_SCHEMA,
+  BUILD123D_MCP_APP_INFO,
+  BUILD123D_VIEW_APP_MANIFEST,
+  VIEW_APP_MANIFEST_SCHEMA,
+} from "./src/ui/view-app-manifest.ts";
+export type {
+  Build123dMcpAppInfo,
+  Build123dViewAppManifest,
+  Build123dViewAppResourceDeclaration,
+} from "./src/ui/view-app-manifest.ts";
 
 export {
   ASSEMBLY_INTEGRITY_MAXIMUM_BASE64_CHARACTERS,

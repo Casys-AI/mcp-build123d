@@ -1,4 +1,12 @@
 import type { GeometryResult } from "./contract.ts";
+import type {
+  Build123dRecordedResourceReader,
+  Build123dViewerSession,
+} from "../../recorded-view-session.ts";
+import {
+  BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA,
+  BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
+} from "../../recorded-view-session.ts";
 
 export const BUILD123D_COMPONENT_KEYS = {
   status: "build123d.geometry-status",
@@ -7,14 +15,25 @@ export const BUILD123D_COMPONENT_KEYS = {
   artifacts: "build123d.export-artifacts",
 } as const;
 
-export interface GeometryComponentData {
+export interface ToolGeometryComponentData {
   readonly result: GeometryResult;
 }
+
+export interface ViewerSessionGeometryComponentData {
+  readonly source: "viewer-session";
+  readonly session: Build123dViewerSession;
+  /** Fingerprint-only access through the explicit read-only parent bridge. */
+  readonly readResource: Build123dRecordedResourceReader;
+}
+
+export type GeometryComponentData =
+  | ToolGeometryComponentData
+  | ViewerSessionGeometryComponentData;
 
 export interface GeometryStatusValue {
   readonly label: string;
   readonly detail: string;
-  readonly tone: "success";
+  readonly tone: "success" | "info" | "warning" | "neutral";
 }
 
 export interface GeometryMetricValue {
@@ -36,9 +55,99 @@ export const BUILD123D_DEFAULT_SURFACE = {
   ],
 } as const;
 
+/**
+ * A viewer-session action replaces the complete App read model. It does
+ * not require a host-selected component surface and deliberately omits OCCT
+ * execution metrics that are not present in the canonical Thread projection.
+ */
+export const BUILD123D_VIEWER_SESSION_SURFACE = {
+  layout: { type: "stack", gap: "md" },
+  components: [
+    {
+      id: "session-geometry-status",
+      component: BUILD123D_COMPONENT_KEYS.status,
+    },
+    {
+      id: "session-geometry-canvas",
+      component: BUILD123D_COMPONENT_KEYS.canvas,
+    },
+    {
+      id: "session-geometry-provenance",
+      component: BUILD123D_COMPONENT_KEYS.artifacts,
+    },
+  ],
+} as const;
+
+export function isViewerSessionGeometryData(
+  data: GeometryComponentData,
+): data is ViewerSessionGeometryComponentData {
+  return "source" in data && data.source === "viewer-session";
+}
+
+export function isCanonicalRecordedSession(
+  session: Build123dViewerSession,
+): session is Extract<Build123dViewerSession, {
+  schemaVersion: typeof BUILD123D_RECORDED_VIEW_SESSION_SCHEMA;
+}> {
+  return session.schemaVersion === BUILD123D_RECORDED_VIEW_SESSION_SCHEMA;
+}
+
+export function isGeometryReviewSession(
+  session: Build123dViewerSession,
+): session is Extract<Build123dViewerSession, {
+  schemaVersion: typeof BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA;
+}> {
+  return session.schemaVersion === BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA;
+}
+
+/**
+ * Recorded sessions own their complete surface. Direct tool results return no
+ * override so the component runtime can honor the host-selected surface, with
+ * the registry default as its standalone fallback.
+ */
+export function geometrySurfaceOverride(
+  data: GeometryComponentData,
+): typeof BUILD123D_VIEWER_SESSION_SURFACE | undefined {
+  return isViewerSessionGeometryData(data)
+    ? BUILD123D_VIEWER_SESSION_SURFACE
+    : undefined;
+}
+
 export function geometryStatusValue(
   data: GeometryComponentData,
 ): GeometryStatusValue {
+  if (isViewerSessionGeometryData(data)) {
+    if (isGeometryReviewSession(data.session)) {
+      const projection = data.session.projection;
+      return {
+        label: data.session.status.toUpperCase(),
+        detail: projection.status === "available"
+          ? `Review GLB projection · SHA-256 ${
+            projection.artifact.artifactFingerprint.slice(
+              "sha256:".length,
+              19,
+            )
+          }…`
+          : `${projection.status.toUpperCase()} · ${projection.reason}`,
+        tone: data.session.status === "provisional" ? "warning" : "neutral",
+      };
+    }
+    const projection = data.session.projection;
+    if (projection.status === "available") {
+      return {
+        label: "RECORDED",
+        detail: `Recorded GLB projection · SHA-256 ${
+          projection.artifact.artifactFingerprint.slice("sha256:".length, 19)
+        }…`,
+        tone: "info",
+      };
+    }
+    return {
+      label: projection.status.toUpperCase(),
+      detail: projection.reason,
+      tone: projection.status === "unresolved" ? "warning" : "neutral",
+    };
+  }
   const result = data.result;
   const identity = result.files[0]?.artifact.sha256.slice(0, 12);
   const topology = `${result.metrics.solids} solide${
@@ -54,6 +163,7 @@ export function geometryStatusValue(
 export function geometryMetricValues(
   data: GeometryComponentData,
 ): readonly GeometryMetricValue[] {
+  if (isViewerSessionGeometryData(data)) return [];
   const metrics = data.result.metrics;
   const values: GeometryMetricValue[] = [
     {

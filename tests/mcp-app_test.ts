@@ -12,6 +12,12 @@ import { createCadMcpApp } from "../src/server-app.ts";
 import { build123dToolErrorResult } from "../src/tool-errors.ts";
 import { geometryToolResult } from "../src/tools/execute.ts";
 import { RESULTS_VIEWER_URI } from "../src/ui/constants.ts";
+import {
+  BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA,
+  BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
+} from "../src/ui/recorded-view-session.ts";
+import { MCP_APP_HOST_RESOURCE_PORT_OFFER_TYPE } from "../src/ui/results-viewer/src/resource-bridge.ts";
+import { BUILD123D_MCP_APP_INFO } from "../src/ui/view-app-manifest.ts";
 
 const PROTOCOL_VERSION = "2026-07-28";
 const PROTOCOL_KEY = "io.modelcontextprotocol/protocolVersion";
@@ -724,7 +730,16 @@ Deno.test("the generated result viewer uses resources/read instead of a private 
   });
   const html =
     (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))?.text ?? "";
-  assertStringIncludes(html, "build123d-results-viewer");
+  assertStringIncludes(html, BUILD123D_MCP_APP_INFO.name);
+  assertStringIncludes(html, BUILD123D_MCP_APP_INFO.version);
+  assertStringIncludes(html, BUILD123D_RECORDED_VIEW_SESSION_SCHEMA);
+  assertStringIncludes(html, BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA);
+  assertStringIncludes(html, MCP_APP_HOST_RESOURCE_PORT_OFFER_TYPE);
+  assertStringIncludes(
+    html,
+    "--mcp-view-text: var(--color-text-primary, #29241f)",
+  );
+  assertStringIncludes(html, ':root[data-theme="dark"]');
   assertStringIncludes(html, "readServerResource");
   assertEquals(html.includes("build123d_export_read"), false);
   assertEquals(/<script[^>]+src=/i.test(html), false);
