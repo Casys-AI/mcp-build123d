@@ -22,7 +22,7 @@ import {
   isViewerSessionGeometryData,
 } from "./component-model.ts";
 import { parseGeometryResult } from "./contract.ts";
-import { renderViewer, type ViewerState } from "./render.ts";
+import { renderViewer, type ViewerState } from "./render.tsx";
 import {
   commitLatestStagedRender,
   createLatestRenderGate,
@@ -351,11 +351,11 @@ async function boot(): Promise<void> {
 boot().catch((error) => {
   globalThis.removeEventListener("pagehide", onPageHide);
   appHostResourceBridge.dispose();
-  root.innerHTML = renderViewer({
+  root.replaceChildren(renderViewer({
     phase: "error",
     message: error instanceof Error
       ? error.message
       : "Connexion au MCP Apps host impossible.",
-  });
+  }));
   root.setAttribute("aria-busy", "false");
 });

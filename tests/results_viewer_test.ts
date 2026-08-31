@@ -4,7 +4,6 @@ import {
   type ExportArtifact,
   parseGeometryResult,
 } from "../src/ui/results-viewer/src/contract.ts";
-import { renderViewer } from "../src/ui/results-viewer/src/render.ts";
 import {
   BUILD123D_COMPONENT_KEYS,
   BUILD123D_DEFAULT_SURFACE,
@@ -274,15 +273,37 @@ Deno.test("results viewer status and metrics derive from the verified artifact r
   ]);
 });
 
-Deno.test("results viewer lifecycle errors remain escaped HTML", () => {
-  const errorHtml = renderViewer({
-    phase: "error",
-    message: "<script>alert(1)</script>",
-  });
-  assertEquals(errorHtml.includes("<script>alert"), false);
-  assertStringIncludes(errorHtml, "&lt;script&gt;alert(1)&lt;/script&gt;");
-  assertStringIncludes(renderViewer({ phase: "loading" }), 'aria-busy="true"');
-  assertStringIncludes(renderViewer({ phase: "empty" }), 'aria-busy="false"');
+Deno.test("results viewer lifecycle states use shared StateMessage without innerHTML", async () => {
+  const renderSource = await Deno.readTextFile(
+    new URL("../src/ui/results-viewer/src/render.tsx", import.meta.url),
+  );
+  const main = await Deno.readTextFile(
+    new URL("../src/ui/results-viewer/src/main.ts", import.meta.url),
+  );
+  assertStringIncludes(renderSource, "StateMessage");
+  assertStringIncludes(
+    renderSource,
+    'from "@casys/mcp-view-components/preact"',
+  );
+  assertStringIncludes(renderSource, "Connexion à l’instrument");
+  assertStringIncludes(renderSource, "Réception du résultat de calcul…");
+  assertStringIncludes(renderSource, "En attente d’une mesure");
+  assertStringIncludes(
+    renderSource,
+    "Lancez build123d_execute ou build123d_export pour afficher le résultat exact.",
+  );
+  assertStringIncludes(renderSource, "Résultat non affichable");
+  assertStringIncludes(renderSource, "Erreur inconnue");
+  assertStringIncludes(renderSource, 'tone: "info"');
+  assertStringIncludes(renderSource, 'tone: "danger"');
+  assertStringIncludes(renderSource, "busy: true");
+  assertStringIncludes(renderSource, "busy: false");
+  assertStringIncludes(renderSource, "{copy.detail}");
+  assertEquals(renderSource.includes("innerHTML"), false);
+  assertEquals(renderSource.includes("escapeHtml"), false);
+  assertEquals(renderSource.includes("<script>"), false);
+  assertEquals(main.includes("root.innerHTML"), false);
+  assertStringIncludes(main, "replaceChildren(renderViewer(");
 });
 
 Deno.test("results viewer compact object omits invented units, verdicts and verification", () => {
@@ -331,6 +352,9 @@ Deno.test("result viewer uses the standard resource client and shared components
     styles,
     '.mcp-view-semantic-element[data-density="card"] .cad-stage',
   );
+  assertStringIncludes(styles, ".model-foot .mcp-view-inline-code");
+  assertEquals(styles.includes(".artifact-rows"), false);
+  assertEquals(styles.includes(".model-foot code"), false);
   for (
     const shared of [
       "ArtifactRow",
@@ -343,9 +367,11 @@ Deno.test("result viewer uses the standard resource client and shared components
       "ElementReading",
       "ElementVerdict",
       "EmptyState",
+      "InlineCode",
       "KeyValueList",
       "MetricGrid",
       "SemanticElement",
+      "Stack",
       "StateMessage",
       "Toolbar",
     ]
@@ -353,6 +379,11 @@ Deno.test("result viewer uses the standard resource client and shared components
     assertStringIncludes(components, shared);
   }
   assertStringIncludes(components, 'density="card"');
+  assertStringIncludes(components, "<Stack");
+  assertStringIncludes(components, 'gap="sm"');
+  assertStringIncludes(components, "<InlineCode");
+  assertEquals(components.includes("artifact-rows"), false);
+  assertEquals(components.includes("<code>"), false);
   assertEquals(components.includes('density="viewer"'), false);
   assertEquals(components.includes("LimitGauge"), false);
   assertEquals(components.includes("PathBar"), false);
@@ -361,4 +392,15 @@ Deno.test("result viewer uses the standard resource client and shared components
   assertStringIncludes(components, "mountCadScene(");
   assertEquals(components.includes("gltfViewerReadArguments"), false);
   assertEquals(components.includes("build123d_export_read"), false);
+});
+
+Deno.test("CI pins the exact mcp-server checkout for viewer rebuilds", async () => {
+  const workflow = await Deno.readTextFile(
+    new URL("../.github/workflows/publish.yml", import.meta.url),
+  );
+  assertStringIncludes(workflow, "repository: Casys-AI/mcp-server");
+  assertStringIncludes(
+    workflow,
+    "ref: 8fad891839203122efbe2438ba81a6e7d08c9202",
+  );
 });

@@ -44,11 +44,6 @@ body {
   padding: 0.55rem 0.85rem 0;
 }
 
-.artifact-rows {
-  display: grid;
-  gap: 0.45rem;
-}
-
 .cad-stage {
   position: relative;
   height: clamp(220px, 52vh, 440px);
@@ -128,13 +123,16 @@ body {
   text-transform: uppercase;
 }
 
-.model-foot code {
+.model-foot .mcp-view-inline-code {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: var(--mcp-view-muted);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .mcp-view-key-value dd,
@@ -172,7 +170,7 @@ body {
     height: clamp(140px, 34vh, 210px);
   }
 
-  .model-foot code {
+  .model-foot .mcp-view-inline-code {
     max-width: 100%;
     text-align: left;
   }

@@ -13,11 +13,13 @@ import {
   ElementReading,
   ElementVerdict,
   EmptyState,
+  InlineCode,
   KeyValueList,
   MetricGrid,
   type PreactSurfaceComponentProps,
   type PreactSurfaceContext,
   SemanticElement,
+  Stack,
   StateMessage,
   Toolbar,
 } from "@casys/mcp-view-components/preact";
@@ -402,12 +404,12 @@ const GeometryStage = ({ data, context }: StageProps) => {
             ? "Review · Orbit · Pan · Zoom"
             : "Orbit · Pan · Zoom"}
         </span>
-        <code>
+        <InlineCode>
           {phase.kind === "ready"
             ? phase.resourceUri
             : sessionAvailable?.resourceFingerprint ??
               gltf?.artifact.uri ?? "No GLB artifact"}
-        </code>
+        </InlineCode>
         <span>
           {phase.kind === "ready"
             ? formatBytes(phase.bytes)
@@ -590,7 +592,7 @@ const ExportArtifacts = ({ data }: Props) => {
     <Card title="Export artifacts" eyebrow="Immutable resources">
       {rows.length > 0
         ? (
-          <div class="artifact-rows">
+          <Stack gap="sm">
             {rows.map((row) => (
               <ArtifactRow
                 key={`${row.kind}:${row.digest}`}
@@ -601,7 +603,7 @@ const ExportArtifacts = ({ data }: Props) => {
                 sizeLabel={formatBytes(row.bytes)}
               />
             ))}
-          </div>
+          </Stack>
         )
         : (
           <EmptyState>
