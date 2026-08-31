@@ -327,21 +327,27 @@ wireframe inspection.
 The same standalone viewer advertises a catalog of small, independently
 mountable components during `ui/initialize`. An MCP Compose dashboard chooses a
 declarative surface (component subset, order, grid and gap); without a requested
-surface, standalone mode mounts the default component stack.
+surface, standalone mode mounts one bounded geometry object. Status, metrics,
+canvas and artifact components remain available for host-negotiated composition.
+They are not the default Digital Thread whiteboard surface.
 
 Every component is a Preact component built from the optional
-`@casys/mcp-view-components` presentation runtime and primitives (`Card`,
-`Badge`, `MetricGrid`, `KeyValueList`, `DataTable`, `Button`, `Toolbar` and
-system states). The lifecycle/router remains in renderer-neutral
-`@casys/mcp-view`; the local stylesheet owns only the Three.js viewport and
-CAD-specific responsive layout.
+`@casys/mcp-view-components` presentation runtime and primitives
+(`SemanticElement` at `card` density when the provider supplies a stable
+identity, otherwise a compact `Card`, plus `ArtifactRow`, `Badge`, `MetricGrid`,
+`KeyValueList`, `Button`, `Toolbar` and system states). The lifecycle/router
+remains in renderer-neutral `@casys/mcp-view`; the local stylesheet owns only
+the Three.js viewport and CAD-specific responsive layout. The App never invents
+a semantic reference or infers a verdict, bound, unit, path, or verification
+claim.
 
-| Component key                | Real data and behaviour                                           |
-| ---------------------------- | ----------------------------------------------------------------- |
-| `build123d.geometry-status`  | computation/export status and SHA-256 artifact identity           |
-| `build123d.geometry-metrics` | OCCT metrics, topology, optional mass and density                 |
-| `build123d.geometry-canvas`  | verified GLB resource plus interactive Three.js scene and cleanup |
-| `build123d.export-artifacts` | immutable resource URIs, digests, MIME types and byte sizes       |
+| Component key                | Real data and behaviour                                                |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| `build123d.geometry-object`  | one compact result: exact identity when available, provider GLB canvas |
+| `build123d.geometry-status`  | computation/export status and SHA-256 artifact identity                |
+| `build123d.geometry-metrics` | OCCT metrics, topology, optional mass and density                      |
+| `build123d.geometry-canvas`  | verified GLB resource plus interactive Three.js scene and cleanup      |
+| `build123d.export-artifacts` | immutable resource URIs, digests, MIME types and byte sizes            |
 
 Repeating a canvas component is supported: controls and Three.js cleanup are
 scoped to each surface instance. A resource URI identifies exact bytes; it does

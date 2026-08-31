@@ -8,7 +8,13 @@ import { renderViewer } from "../src/ui/results-viewer/src/render.ts";
 import {
   BUILD123D_COMPONENT_KEYS,
   BUILD123D_DEFAULT_SURFACE,
+  geometryArtifactRows,
   geometryMetricValues,
+  geometryObjectIdent,
+  geometryObjectProvenance,
+  geometryObjectReading,
+  geometryObjectReference,
+  geometryObjectVerdict,
   geometryStatusValue,
 } from "../src/ui/results-viewer/src/component-model.ts";
 
@@ -182,20 +188,18 @@ Deno.test("results viewer verifies a GLB resources/read response against the ret
   if (!wrongUri.ok) assertStringIncludes(wrongUri.error, "URI");
 });
 
-Deno.test("results viewer publishes the small component catalog and surface", () => {
+Deno.test("results viewer publishes the small component catalog and a single-object default surface", () => {
   assertEquals(BUILD123D_COMPONENT_KEYS, {
+    object: "build123d.geometry-object",
     status: "build123d.geometry-status",
     metrics: "build123d.geometry-metrics",
     canvas: "build123d.geometry-canvas",
     artifacts: "build123d.export-artifacts",
   });
   assertEquals(BUILD123D_DEFAULT_SURFACE, {
-    layout: { type: "stack", gap: "md" },
+    layout: { type: "stack", gap: "sm" },
     components: [
-      { id: "geometry-status", component: "build123d.geometry-status" },
-      { id: "geometry-metrics", component: "build123d.geometry-metrics" },
-      { id: "geometry-canvas", component: "build123d.geometry-canvas" },
-      { id: "export-artifacts", component: "build123d.export-artifacts" },
+      { id: "geometry-object", component: "build123d.geometry-object" },
     ],
   });
 });
@@ -216,6 +220,34 @@ Deno.test("results viewer status and metrics derive from the verified artifact r
     detail: "SHA-256 dddddddddddd… · 1 solide · 6 faces",
     tone: "success",
   });
+  assertEquals(geometryObjectReference({ result: parsed.value }), {
+    domain: "cad",
+    kind: "export",
+    id: "d".repeat(64),
+  });
+  assertEquals(geometryObjectIdent({ result: parsed.value }), {
+    marker: "EXPORTÉ",
+    label: "Geometry export",
+    detail: "SHA-256 dddddddddddd… · 1 solide · 6 faces",
+  });
+  assertEquals(geometryObjectReading({ result: parsed.value }), {
+    id: "volume",
+    label: "Volume",
+    value: "1,000",
+    unit: "mm³",
+  });
+  assertEquals(geometryObjectProvenance({ result: parsed.value }), {
+    label: "SHA-256",
+    value: "d".repeat(64),
+  });
+  assertEquals(geometryObjectVerdict({ result: parsed.value }), undefined);
+  assertEquals(geometryArtifactRows({ result: parsed.value }), [{
+    kind: "GLTF",
+    label: `${"d".repeat(64)}.glb`,
+    uri: `casys://build123d/artifacts/${"d".repeat(64)}.glb`,
+    digest: "d".repeat(64),
+    bytes: 4096,
+  }]);
   assertEquals(geometryMetricValues({ result: parsed.value }), [
     { id: "volume", label: "Volume", value: "1,000", unit: "mm³" },
     { id: "surface-area", label: "Surface", value: "700", unit: "mm²" },
@@ -253,6 +285,40 @@ Deno.test("results viewer lifecycle errors remain escaped HTML", () => {
   assertStringIncludes(renderViewer({ phase: "empty" }), 'aria-busy="false"');
 });
 
+Deno.test("results viewer compact object omits invented units, verdicts and verification", () => {
+  const execution = parseGeometryResult({
+    schemaVersion: "1.0",
+    kind: "execution",
+    metrics: {
+      volume_mm3: 8,
+      area_mm2: 24,
+      solids: 1,
+      faces: 6,
+      edges: 12,
+    },
+    files: [],
+  });
+  if (!execution.ok) throw new Error(execution.error);
+  assertEquals(geometryObjectReference({ result: execution.value }), undefined);
+  assertEquals(geometryObjectIdent({ result: execution.value }), {
+    marker: "CALCULÉ",
+    label: "Geometry",
+    detail: "1 solide · 6 faces",
+  });
+  assertEquals(geometryObjectReading({ result: execution.value }), {
+    id: "volume",
+    label: "Volume",
+    value: "8",
+    unit: "mm³",
+  });
+  assertEquals(
+    geometryObjectProvenance({ result: execution.value }),
+    undefined,
+  );
+  assertEquals(geometryObjectVerdict({ result: execution.value }), undefined);
+  assertEquals(geometryArtifactRows({ result: execution.value }), []);
+});
+
 Deno.test("result viewer uses the standard resource client and shared components", async () => {
   const styles = await Deno.readTextFile(
     new URL("../src/ui/results-viewer/src/styles.css", import.meta.url),
@@ -261,22 +327,38 @@ Deno.test("result viewer uses the standard resource client and shared components
     new URL("../src/ui/results-viewer/src/components.tsx", import.meta.url),
   );
   assertStringIncludes(styles, "container: build123d-view / inline-size");
+  assertStringIncludes(
+    styles,
+    '.mcp-view-semantic-element[data-density="card"] .cad-stage',
+  );
   for (
     const shared of [
+      "ArtifactRow",
       "Badge",
       "Button",
       "Card",
-      "DataTable",
+      "ElementBody",
+      "ElementIdent",
+      "ElementProvenance",
+      "ElementReading",
+      "ElementVerdict",
       "EmptyState",
       "KeyValueList",
       "MetricGrid",
+      "SemanticElement",
       "StateMessage",
       "Toolbar",
     ]
   ) {
     assertStringIncludes(components, shared);
   }
+  assertStringIncludes(components, 'density="card"');
+  assertEquals(components.includes('density="viewer"'), false);
+  assertEquals(components.includes("LimitGauge"), false);
+  assertEquals(components.includes("PathBar"), false);
+  assertEquals(components.includes("verification:"), false);
   assertStringIncludes(components, "readServerResource");
+  assertStringIncludes(components, "mountCadScene(");
   assertEquals(components.includes("gltfViewerReadArguments"), false);
   assertEquals(components.includes("build123d_export_read"), false);
 });

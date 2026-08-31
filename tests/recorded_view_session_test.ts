@@ -1,7 +1,13 @@
 import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import {
   BUILD123D_VIEWER_SESSION_SURFACE,
+  geometryArtifactRows,
   geometryMetricValues,
+  geometryObjectIdent,
+  geometryObjectProvenance,
+  geometryObjectReading,
+  geometryObjectReference,
+  geometryObjectVerdict,
   geometryStatusValue,
   geometrySurfaceOverride,
 } from "../src/ui/results-viewer/src/component-model.ts";
@@ -337,6 +343,17 @@ Deno.test("pre-MRTR geometry review keeps documentary and unavailable literal", 
   assertEquals(parsed.value.projection, {
     status: "unavailable",
     reason: "draft-glb-unavailable",
+  });
+  const data = {
+    source: "viewer-session" as const,
+    session: parsed.value,
+    readResource: unusedResourceReader,
+  };
+  assertEquals(geometryObjectReading(data), undefined);
+  assertEquals(geometryObjectVerdict(data), {
+    label: "Review status",
+    value: "documentary",
+    tone: "info",
   });
 });
 
@@ -836,13 +853,27 @@ Deno.test("recorded geometry owns a dedicated surface and never invents OCCT met
   );
   assertEquals(
     BUILD123D_VIEWER_SESSION_SURFACE.components.map((item) => item.component),
-    [
-      "build123d.geometry-status",
-      "build123d.geometry-canvas",
-      "build123d.export-artifacts",
-    ],
+    ["build123d.geometry-object"],
   );
   assertEquals(geometryMetricValues(data), []);
+  assertEquals(geometryArtifactRows(data), []);
+  assertEquals(geometryObjectReading(data), undefined);
+  assertEquals(geometryObjectVerdict(data), undefined);
+  assertEquals(geometryObjectReference(data), {
+    domain: "cad",
+    kind: "recorded-canonical-geometry",
+    id: "two-piece-tablet-stand",
+    basisFingerprint: CAPTURE_FINGERPRINT.slice("sha256:".length),
+  });
+  assertEquals(geometryObjectIdent(data), {
+    marker: "RECORDED",
+    label: "two-piece-tablet-stand",
+    detail: "project-tps03 r24 · thread-tps03 r19",
+  });
+  assertEquals(geometryObjectProvenance(data), {
+    label: "Canonical capture",
+    value: CAPTURE_FINGERPRINT,
+  });
   assertEquals(geometryStatusValue(data), {
     label: "RECORDED",
     detail: "Recorded GLB projection · SHA-256 bbbbbbbbbbbb…",
@@ -865,6 +896,28 @@ Deno.test("pre-MRTR review surface stays provisional and omits canonical metrics
     BUILD123D_VIEWER_SESSION_SURFACE,
   );
   assertEquals(geometryMetricValues(data), []);
+  assertEquals(geometryArtifactRows(data), []);
+  assertEquals(geometryObjectReading(data), undefined);
+  assertEquals(geometryObjectReference(data), {
+    domain: "cad",
+    kind: "project-geometry-review",
+    id: "review-tps03-geometry-r24",
+    basisFingerprint: REVIEW_FINGERPRINT.slice("sha256:".length),
+  });
+  assertEquals(geometryObjectIdent(data), {
+    marker: "PROVISIONAL",
+    label: "two-piece-tablet-stand",
+    detail: "review-tps03-geometry-r24 · r24",
+  });
+  assertEquals(geometryObjectProvenance(data), {
+    label: "Draft capture",
+    value: DRAFT_FINGERPRINT,
+  });
+  assertEquals(geometryObjectVerdict(data), {
+    label: "Review status",
+    value: "provisional",
+    tone: "warning",
+  });
   assertEquals(geometryStatusValue(data), {
     label: "PROVISIONAL",
     detail: "Review GLB projection · SHA-256 bbbbbbbbbbbb…",
@@ -887,6 +940,10 @@ Deno.test("direct viewer advertises components and remounts only direct host-sel
   assertStringIncludes(main, "const surface = geometrySurfaceOverride(data);");
   assertStringIncludes(main, "JSON.stringify(mounted.surface)");
   assertStringIncludes(components, "defaultSurface: BUILD123D_DEFAULT_SURFACE");
+  assertStringIncludes(components, "BUILD123D_COMPONENT_KEYS.object");
+  assertStringIncludes(components, "<SemanticElement");
+  assertStringIncludes(components, 'density="card"');
+  assertEquals(components.includes('density="viewer"'), false);
   assertStringIncludes(
     components,
     'from "@casys/mcp-view-components/preact"',

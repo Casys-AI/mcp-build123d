@@ -2,17 +2,22 @@
 
 import { defineComponentRegistry } from "@casys/mcp-view-components";
 import {
+  ArtifactRow,
   Badge,
   Button,
   Card,
-  DataTable,
-  type DataTableColumn,
   definePreactComponent,
+  ElementBody,
+  ElementIdent,
+  ElementProvenance,
+  ElementReading,
+  ElementVerdict,
   EmptyState,
   KeyValueList,
   MetricGrid,
   type PreactSurfaceComponentProps,
   type PreactSurfaceContext,
+  SemanticElement,
   StateMessage,
   Toolbar,
 } from "@casys/mcp-view-components/preact";
@@ -21,12 +26,18 @@ import {
   type Build123dRecordedGeometryProjection,
   loadBuild123dRecordedGltf,
 } from "../../recorded-view-session.ts";
-import { decodeGltfArtifact, type ExportFile } from "./contract.ts";
+import { decodeGltfArtifact } from "./contract.ts";
 import {
   BUILD123D_COMPONENT_KEYS,
   BUILD123D_DEFAULT_SURFACE,
+  geometryArtifactRows,
   type GeometryComponentData,
   geometryMetricValues,
+  geometryObjectIdent,
+  geometryObjectProvenance,
+  geometryObjectReading,
+  geometryObjectReference,
+  geometryObjectVerdict,
   geometryStatusValue,
   isCanonicalRecordedSession,
   isGeometryReviewSession,
@@ -35,6 +46,7 @@ import {
 import { type CadSceneController, mountCadScene } from "./scene.ts";
 
 type Props = PreactSurfaceComponentProps<GeometryComponentData>;
+type StageProps = Pick<Props, "data" | "context">;
 
 const GeometryStatus = ({ data }: Props) => {
   const status = geometryStatusValue(data);
@@ -127,6 +139,71 @@ const GeometryMetrics = ({ data }: Props) => (
   </Card>
 );
 
+const GeometryObject = ({ data, context }: Props) => {
+  const reference = geometryObjectReference(data);
+  const ident = geometryObjectIdent(data);
+  const reading = geometryObjectReading(data);
+  const provenance = geometryObjectProvenance(data);
+  const verdict = geometryObjectVerdict(data);
+  const readingSlot = reading
+    ? (
+      <ElementReading
+        label={reading.label}
+        value={reading.value}
+        unit={reading.unit}
+      />
+    )
+    : undefined;
+  const body = (
+    <ElementBody className="geometry-object-body">
+      <GeometryStage data={data} context={context} />
+    </ElementBody>
+  );
+
+  // A direct execution without an artifact has no provider-owned stable ID.
+  // Keep its compact visualization, but do not manufacture a semantic ref.
+  if (reference === undefined) {
+    return (
+      <Card
+        className="geometry-object-card"
+        eyebrow={ident.detail}
+        title={ident.label}
+        actions={<Badge>{ident.marker}</Badge>}
+      >
+        {readingSlot}
+        {body}
+      </Card>
+    );
+  }
+  return (
+    <SemanticElement
+      reference={reference}
+      density="card"
+      tone={verdict?.tone}
+      ident={
+        <ElementIdent
+          marker={ident.marker}
+          label={ident.label}
+          detail={ident.detail}
+        />
+      }
+      reading={readingSlot}
+      body={body}
+      verdict={verdict
+        ? <ElementVerdict label={verdict.label} value={verdict.value} />
+        : undefined}
+      provenance={provenance
+        ? (
+          <ElementProvenance
+            label={provenance.label}
+            value={provenance.value}
+          />
+        )
+        : undefined}
+    />
+  );
+};
+
 type CanvasPhase =
   | { kind: "loading"; detail: string }
   | {
@@ -139,7 +216,7 @@ type CanvasPhase =
   | { kind: "empty"; detail: string }
   | { kind: "error"; detail: string };
 
-const GeometryCanvas = ({ data, context }: Props) => {
+const GeometryStage = ({ data, context }: StageProps) => {
   const viewerSession = isViewerSessionGeometryData(data)
     ? data.session
     : undefined;
@@ -269,20 +346,8 @@ const GeometryCanvas = ({ data, context }: Props) => {
   );
 
   return (
-    <Card
-      className="model-panel"
-      title={canonicalSession
-        ? "Recorded GLB projection / 3D space"
-        : reviewSession
-        ? "Geometry review / 3D space"
-        : "Assembly / 3D space"}
-      eyebrow={canonicalSession
-        ? "Recorded read-only projection"
-        : reviewSession
-        ? `${reviewSession.status} Project projection · read-only`
-        : "Geometry inspection"}
-      actions={controls}
-    >
+    <div class="geometry-stage-shell">
+      {controls}
       <div class="cad-stage">
         <div
           ref={viewport}
@@ -351,33 +416,38 @@ const GeometryCanvas = ({ data, context }: Props) => {
             : "—"}
         </span>
       </footer>
-    </Card>
+    </div>
   );
 };
 
-const artifactColumns: readonly DataTableColumn<ExportFile>[] = [
-  {
-    id: "format",
-    label: "Format",
-    render: (file) => <Badge tone="info">{file.format.toUpperCase()}</Badge>,
-  },
-  {
-    id: "resource",
-    label: "Resource",
-    render: (file) => <code>{file.artifact.uri}</code>,
-  },
-  {
-    id: "sha256",
-    label: "SHA-256",
-    render: (file) => <code>{file.artifact.sha256}</code>,
-  },
-  {
-    id: "bytes",
-    label: "Size",
-    align: "right",
-    render: (file) => formatBytes(file.artifact.bytes),
-  },
-];
+const GeometryCanvas = ({ data, context }: Props) => {
+  const viewerSession = isViewerSessionGeometryData(data)
+    ? data.session
+    : undefined;
+  const canonicalSession = viewerSession !== undefined &&
+    isCanonicalRecordedSession(viewerSession);
+  const reviewSession = viewerSession !== undefined &&
+      isGeometryReviewSession(viewerSession)
+    ? viewerSession
+    : undefined;
+  return (
+    <Card
+      className="model-panel"
+      title={canonicalSession
+        ? "Recorded GLB projection / 3D space"
+        : reviewSession
+        ? "Geometry review / 3D space"
+        : "Assembly / 3D space"}
+      eyebrow={canonicalSession
+        ? "Recorded read-only projection"
+        : reviewSession
+        ? `${reviewSession.status} Project projection · read-only`
+        : "Geometry inspection"}
+    >
+      <GeometryStage data={data} context={context} />
+    </Card>
+  );
+};
 
 const ExportArtifacts = ({ data }: Props) => {
   if (isViewerSessionGeometryData(data)) {
@@ -515,16 +585,23 @@ const ExportArtifacts = ({ data }: Props) => {
       </Card>
     );
   }
+  const rows = geometryArtifactRows(data);
   return (
     <Card title="Export artifacts" eyebrow="Immutable resources">
-      {data.result.files.length > 0
+      {rows.length > 0
         ? (
-          <DataTable
-            label="Immutable build123d export artifacts"
-            rows={data.result.files}
-            columns={artifactColumns}
-            rowKey={(file) => `${file.format}:${file.artifact.sha256}`}
-          />
+          <div class="artifact-rows">
+            {rows.map((row) => (
+              <ArtifactRow
+                key={`${row.kind}:${row.digest}`}
+                kind={row.kind}
+                label={row.label}
+                uri={row.uri}
+                fingerprint={{ algorithm: "SHA-256", digest: row.digest }}
+                sizeLabel={formatBytes(row.bytes)}
+              />
+            ))}
+          </div>
         )
         : (
           <EmptyState>
@@ -541,6 +618,14 @@ export const BUILD123D_COMPONENT_REGISTRY = defineComponentRegistry<
   PreactSurfaceContext<GeometryComponentData>
 >({
   components: {
+    [BUILD123D_COMPONENT_KEYS.object]: definePreactComponent(
+      {
+        title: "Geometry object",
+        description:
+          "One bounded geometry result or review, with a semantic identity only when the provider supplies one.",
+      },
+      GeometryObject,
+    ),
     [BUILD123D_COMPONENT_KEYS.status]: definePreactComponent(
       {
         title: "Geometry status",

@@ -31,6 +31,24 @@ body {
   background: var(--mcp-view-subtle);
 }
 
+.geometry-stage-shell {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.model-panel .geometry-stage-shell {
+  gap: 0;
+}
+
+.model-panel .geometry-stage-shell > .mcp-view-toolbar {
+  padding: 0.55rem 0.85rem 0;
+}
+
+.artifact-rows {
+  display: grid;
+  gap: 0.45rem;
+}
+
 .cad-stage {
   position: relative;
   height: clamp(220px, 52vh, 440px);
@@ -119,13 +137,25 @@ body {
   white-space: nowrap;
 }
 
-.mcp-view-table code,
-.mcp-view-key-value dd {
+.mcp-view-key-value dd,
+.mcp-view-artifact-row-uri,
+.mcp-view-artifact-row-fingerprint {
   font-family: var(--cad-mono);
 }
 
 .lifecycle-state {
-  min-height: 14rem;
+  min-height: 8rem;
+}
+
+.mcp-view-semantic-element[data-density="card"] .cad-stage {
+  height: clamp(150px, 28vh, 240px);
+  border-radius: var(--mcp-view-radius-sm);
+}
+
+.mcp-view-semantic-element[data-density="card"] .model-foot {
+  min-height: 0;
+  padding: 0.3rem 0 0;
+  border-top: 0;
 }
 
 @container build123d-view (max-width: 620px) {
@@ -136,6 +166,10 @@ body {
 
   .cad-stage {
     height: clamp(210px, 46vh, 340px);
+  }
+
+  .mcp-view-semantic-element[data-density="card"] .cad-stage {
+    height: clamp(140px, 34vh, 210px);
   }
 
   .model-foot code {

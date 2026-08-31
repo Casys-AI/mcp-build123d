@@ -9,6 +9,7 @@ import {
 } from "../../recorded-view-session.ts";
 
 export const BUILD123D_COMPONENT_KEYS = {
+  object: "build123d.geometry-object",
   status: "build123d.geometry-status",
   metrics: "build123d.geometry-metrics",
   canvas: "build123d.geometry-canvas",
@@ -44,14 +45,41 @@ export interface GeometryMetricValue {
   readonly detail?: string;
 }
 
-/** Standalone mode is simply the default composition of every small component. */
+export interface GeometryObjectReference {
+  readonly domain: "cad";
+  readonly kind: string;
+  readonly id: string;
+  readonly basisFingerprint?: string;
+}
+
+export interface GeometryObjectIdent {
+  readonly marker: string;
+  readonly label: string;
+  readonly detail: string;
+}
+
+export interface GeometryObjectSlot {
+  readonly label: string;
+  readonly value: string;
+}
+
+export interface GeometryObjectVerdict extends GeometryObjectSlot {
+  readonly tone: "warning" | "info";
+}
+
+export interface GeometryArtifactRowValue {
+  readonly kind: string;
+  readonly label: string;
+  readonly uri: string;
+  readonly digest: string;
+  readonly bytes: number;
+}
+
+/** Standalone default: one bounded geometry object, not a capability dashboard. */
 export const BUILD123D_DEFAULT_SURFACE = {
-  layout: { type: "stack", gap: "md" },
+  layout: { type: "stack", gap: "sm" },
   components: [
-    { id: "geometry-status", component: BUILD123D_COMPONENT_KEYS.status },
-    { id: "geometry-metrics", component: BUILD123D_COMPONENT_KEYS.metrics },
-    { id: "geometry-canvas", component: BUILD123D_COMPONENT_KEYS.canvas },
-    { id: "export-artifacts", component: BUILD123D_COMPONENT_KEYS.artifacts },
+    { id: "geometry-object", component: BUILD123D_COMPONENT_KEYS.object },
   ],
 } as const;
 
@@ -61,19 +89,11 @@ export const BUILD123D_DEFAULT_SURFACE = {
  * execution metrics that are not present in the canonical Thread projection.
  */
 export const BUILD123D_VIEWER_SESSION_SURFACE = {
-  layout: { type: "stack", gap: "md" },
+  layout: { type: "stack", gap: "sm" },
   components: [
     {
-      id: "session-geometry-status",
-      component: BUILD123D_COMPONENT_KEYS.status,
-    },
-    {
-      id: "session-geometry-canvas",
-      component: BUILD123D_COMPONENT_KEYS.canvas,
-    },
-    {
-      id: "session-geometry-provenance",
-      component: BUILD123D_COMPONENT_KEYS.artifacts,
+      id: "session-geometry-object",
+      component: BUILD123D_COMPONENT_KEYS.object,
     },
   ],
 } as const;
@@ -218,6 +238,125 @@ export function geometryMetricValues(
     });
   }
   return values;
+}
+
+function primaryExportFile(data: ToolGeometryComponentData) {
+  return data.result.files.find((file) => file.format === "gltf") ??
+    data.result.files[0];
+}
+
+export function geometryObjectReference(
+  data: GeometryComponentData,
+): GeometryObjectReference | undefined {
+  if (isViewerSessionGeometryData(data)) {
+    if (isGeometryReviewSession(data.session)) {
+      return {
+        domain: "cad",
+        kind: data.session.kind,
+        id: data.session.anchor.id,
+        basisFingerprint: semanticBasisDigest(data.session.anchor.fingerprint),
+      };
+    }
+    return {
+      domain: "cad",
+      kind: data.session.kind,
+      id: data.session.basis.subjectId,
+      basisFingerprint: semanticBasisDigest(
+        data.session.provenance.canonicalCapture.artifactFingerprint,
+      ),
+    };
+  }
+  const file = primaryExportFile(data);
+  if (file === undefined) return undefined;
+  return {
+    domain: "cad",
+    kind: data.result.kind,
+    id: file.artifact.sha256,
+  };
+}
+
+function semanticBasisDigest(
+  fingerprint: `sha256:${string}`,
+): string | undefined {
+  const match = /^sha256:([a-f0-9]{64})$/.exec(fingerprint);
+  return match?.[1];
+}
+
+export function geometryObjectIdent(
+  data: GeometryComponentData,
+): GeometryObjectIdent {
+  const status = geometryStatusValue(data);
+  if (isViewerSessionGeometryData(data)) {
+    const session = data.session;
+    return {
+      marker: status.label,
+      label: session.basis.subjectId,
+      detail: isGeometryReviewSession(session)
+        ? `${session.anchor.id} · r${session.anchor.revision}`
+        : `${session.basis.projectId} r${session.basis.projectRevision} · ${session.basis.thread.id} r${session.basis.thread.revision}`,
+    };
+  }
+  return {
+    marker: status.label,
+    label: data.result.kind === "export" ? "Geometry export" : "Geometry",
+    detail: status.detail,
+  };
+}
+
+export function geometryObjectReading(
+  data: GeometryComponentData,
+): GeometryMetricValue | undefined {
+  return geometryMetricValues(data).find((item) => item.id === "volume");
+}
+
+export function geometryObjectProvenance(
+  data: GeometryComponentData,
+): GeometryObjectSlot | undefined {
+  if (isViewerSessionGeometryData(data)) {
+    if (isGeometryReviewSession(data.session)) {
+      return {
+        label: "Draft capture",
+        value: data.session.provenance.draftCapture.artifactFingerprint,
+      };
+    }
+    return {
+      label: "Canonical capture",
+      value: data.session.provenance.canonicalCapture.artifactFingerprint,
+    };
+  }
+  const digest = primaryExportFile(data)?.artifact.sha256;
+  return digest === undefined ? undefined : { label: "SHA-256", value: digest };
+}
+
+export function geometryObjectVerdict(
+  data: GeometryComponentData,
+): GeometryObjectVerdict | undefined {
+  if (
+    !isViewerSessionGeometryData(data) || !isGeometryReviewSession(data.session)
+  ) {
+    return undefined;
+  }
+  return {
+    label: "Review status",
+    value: data.session.status,
+    tone: data.session.status === "provisional" ? "warning" : "info",
+  };
+}
+
+export function geometryArtifactRows(
+  data: GeometryComponentData,
+): readonly GeometryArtifactRowValue[] {
+  if (isViewerSessionGeometryData(data)) return [];
+  return data.result.files.map((file) => {
+    const uri = file.artifact.uri;
+    return {
+      kind: file.format.toUpperCase(),
+      label: uri.slice(uri.lastIndexOf("/") + 1),
+      uri,
+      digest: file.artifact.sha256,
+      bytes: file.artifact.bytes,
+    };
+  });
 }
 
 function numeric(value: number): string {
