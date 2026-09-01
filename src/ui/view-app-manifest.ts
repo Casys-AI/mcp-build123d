@@ -5,14 +5,9 @@ import {
   BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
   VIEWER_SESSION_APPLY_ACTION,
 } from "./recorded-view-session.ts";
+import { VIEW_APP_MANIFEST_SCHEMA } from "@casys/mcp-view-contracts";
+export { VIEW_APP_MANIFEST_SCHEMA };
 
-/**
- * Local compatibility surface for the unpublished mcp-view contracts split.
- * Replace these local declarations with `@casys/mcp-view-contracts` imports
- * once that package is published; the JSON shape is intentionally identical.
- */
-export const VIEW_APP_MANIFEST_SCHEMA =
-  "io.casys.mcp.view-app-manifest/1.0" as const;
 export const BUILD123D_GEOMETRY_RESULT_SCHEMA =
   "io.casys.mcp-build123d.geometry-result/1.0" as const;
 

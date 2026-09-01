@@ -4,7 +4,7 @@
  * `build123d_export` result envelopes.
  */
 
-export const VIEWER_SESSION_APPLY_ACTION = "viewer.session.apply" as const;
+export { VIEWER_SESSION_APPLY_ACTION } from "@casys/mcp-view-contracts";
 export const BUILD123D_RECORDED_VIEW_SESSION_SCHEMA =
   "io.casys.mcp-build123d.recorded-geometry-session/1.0" as const;
 export const BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA =
