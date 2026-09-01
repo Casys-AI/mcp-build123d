@@ -17,7 +17,8 @@
   },
   "exports": {
     ".": "./mod.ts",
-    "./server": "./server.ts"
+    "./server": "./server.ts",
+    "./view-app-manifest": "./src/ui/view-app-manifest.json"
   },
   "publish": {
     "include": [
@@ -28,6 +29,7 @@
       "src/**/*.tsx",
       "src/**/*.css",
       "src/**/*.html",
+      "src/ui/view-app-manifest.json",
       "src/ui/dist/**/*.html",
       "src/api/harness.py",
       "src/api/assembly-integrity-harness.py",

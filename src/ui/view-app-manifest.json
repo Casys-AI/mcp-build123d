@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "io.casys.mcp.view-app-manifest/1.0",
+  "app": {
+    "id": "io.casys.mcp-build123d.results",
+    "title": "Build123d geometry",
+    "version": "0.6.1"
+  },
+  "resources": [
+    {
+      "uri": "ui://mcp-build123d/results-viewer",
+      "ownership": "whole-view",
+      "resultSchemas": [
+        "io.casys.mcp-build123d.geometry-result/1.0"
+      ],
+      "acceptedActions": [
+        "viewer.session.apply"
+      ],
+      "sessionSchemas": [
+        "io.casys.mcp-build123d.recorded-geometry-session/1.0",
+        "io.casys.mcp-build123d.geometry-review-session/1.0"
+      ]
+    }
+  ]
+}
