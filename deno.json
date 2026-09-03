@@ -7,6 +7,7 @@
     "compile": "deno compile -A --output mcp-build123d server.ts",
     "test": "deno test --allow-all tests/",
     "build:ui": "deno run --allow-env --allow-net --allow-read --allow-run --allow-write scripts/build-results-viewer.ts",
+    "capture:docs": "deno run --allow-env --allow-net=127.0.0.1 --allow-read --allow-run --allow-write scripts/capture-viewer-doc.ts",
     "generate:harness-source": "deno run --allow-read --allow-write scripts/generate-harness-source.ts && deno fmt src/api/harness-source.ts",
     "generate:assembly-integrity-harness-source": "deno run --allow-read --allow-write scripts/generate-assembly-integrity-harness-source.ts && deno fmt src/api/assembly-integrity-harness-source.ts"
   },

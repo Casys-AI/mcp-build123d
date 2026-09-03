@@ -737,7 +737,7 @@ Deno.test("the generated result viewer uses resources/read instead of a private 
   assertStringIncludes(html, MCP_APP_HOST_RESOURCE_PORT_OFFER_TYPE);
   assertStringIncludes(
     html,
-    "--mcp-view-text: var(--color-text-primary, #29241f)",
+    "--mcp-view-text: var(--color-text-primary, #101519)",
   );
   assertStringIncludes(html, ':root[data-theme="dark"]');
   assertStringIncludes(html, "readServerResource");

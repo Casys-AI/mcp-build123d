@@ -2,6 +2,29 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [Unreleased]
+
+- **Geometry datasheet.** The results viewer default surface is now one bounded
+  `build123d.geometry-datasheet`: a literal status marker (`exported`,
+  `computed`, `recorded`, `provisional`, `documentary`, or the projection
+  status), at most four readings (volume, surface, mass, envelope), the verified
+  3D model in a kit `Slot3D`, titled fact sections (geometry; or Thread/Project
+  basis, capture and GLB projection for sessions), one `ArtifactRow` per sealed
+  export and a single provenance line. Recorded and review sessions mount the
+  same datasheet. The four small catalog components remain for Compose hosts and
+  slice the same model.
+- **Host locale.** Every number in the viewer follows `hostContext.locale` from
+  `ui/initialize`; the previous hard-coded `en-US` formatting and the mixed
+  French/English labels are gone.
+- **Kit pin.** The bundle is rebuilt against `@casys/mcp-view@0.9.2` and
+  `@casys/mcp-view-components@0.6.0` (`Casys-AI/mcp-server@676a2c7`), whose text
+  token fallback is `#101519`.
+- **Reproducible documentation capture.** `deno task capture:docs` renders the
+  committed bundle with the real `build123d_export` fixture
+  `docs/fixtures/bracket-r1.{py,export.json,glb}` (produced by the published
+  provider image) in headless Chrome and writes
+  `docs/assets/build123d-export-viewer.png`, now shown in the README.
+
 ## [0.6.1] - 2026-08-29
 
 - **Release-gate correction.** The container Deno identity check now matches the

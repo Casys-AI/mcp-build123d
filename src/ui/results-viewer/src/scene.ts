@@ -95,7 +95,7 @@ export async function mountCadScene(
     renderer.dispose();
     renderer.forceContextLoss();
     viewport.replaceChildren();
-    throw new Error("Le GLB ne contient aucune géométrie affichable.");
+    throw new Error("The GLB contains no displayable geometry.");
   }
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());

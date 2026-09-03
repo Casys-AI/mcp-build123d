@@ -8,8 +8,12 @@ import { renderViewer } from "../src/ui/results-viewer/src/render.ts";
 import {
   BUILD123D_COMPONENT_KEYS,
   BUILD123D_DEFAULT_SURFACE,
-  geometryMetricValues,
-  geometryStatusValue,
+  formatBytes,
+  geometryFactSections,
+  geometryIdentity,
+  geometryProvenance,
+  geometryReadings,
+  geometryReference,
 } from "../src/ui/results-viewer/src/component-model.ts";
 
 const METRICS = {
@@ -182,25 +186,23 @@ Deno.test("results viewer verifies a GLB resources/read response against the ret
   if (!wrongUri.ok) assertStringIncludes(wrongUri.error, "URI");
 });
 
-Deno.test("results viewer publishes the small component catalog and surface", () => {
+Deno.test("results viewer publishes the datasheet default and the small component catalog", () => {
   assertEquals(BUILD123D_COMPONENT_KEYS, {
+    datasheet: "build123d.geometry-datasheet",
     status: "build123d.geometry-status",
     metrics: "build123d.geometry-metrics",
     canvas: "build123d.geometry-canvas",
     artifacts: "build123d.export-artifacts",
   });
   assertEquals(BUILD123D_DEFAULT_SURFACE, {
-    layout: { type: "stack", gap: "md" },
+    layout: { type: "stack", gap: "none" },
     components: [
-      { id: "geometry-status", component: "build123d.geometry-status" },
-      { id: "geometry-metrics", component: "build123d.geometry-metrics" },
-      { id: "geometry-canvas", component: "build123d.geometry-canvas" },
-      { id: "export-artifacts", component: "build123d.export-artifacts" },
+      { id: "geometry-datasheet", component: "build123d.geometry-datasheet" },
     ],
   });
 });
 
-Deno.test("results viewer status and metrics derive from the verified artifact result", () => {
+Deno.test("results viewer datasheet derives identity, readings, facts and provenance from the verified result", () => {
   const parsed = parseGeometryResult({
     schemaVersion: "1.0",
     kind: "export",
@@ -211,35 +213,99 @@ Deno.test("results viewer status and metrics derive from the verified artifact r
     }],
   });
   if (!parsed.ok) throw new Error(parsed.error);
-  assertEquals(geometryStatusValue({ result: parsed.value }), {
-    label: "EXPORTÉ",
-    detail: "SHA-256 dddddddddddd… · 1 solide · 6 faces",
+  const data = { result: parsed.value };
+  assertEquals(geometryIdentity(data, "en-US"), {
+    marker: "exported",
+    label: "Exported geometry",
+    detail: "build123d · 1 solid · 6 faces · 12 edges",
     tone: "success",
   });
-  assertEquals(geometryMetricValues({ result: parsed.value }), [
+  assertEquals(geometryReference(data), {
+    domain: "build123d",
+    kind: "export",
+    id: "d".repeat(64),
+    basisFingerprint: "d".repeat(64),
+  });
+  assertEquals(geometryReadings(data, "en-US"), [
     { id: "volume", label: "Volume", value: "1,000", unit: "mm³" },
     { id: "surface-area", label: "Surface", value: "700", unit: "mm²" },
+    { id: "mass", label: "Mass", value: "0.0027", unit: "kg" },
     {
       id: "bounding-envelope",
       label: "Envelope",
       value: "10 × 20 × 5",
       unit: "mm",
     },
-    {
-      id: "center-of-mass",
-      label: "Centre de masse",
-      value: "5 × 10 × 2.5",
-      unit: "mm",
-    },
-    {
-      id: "topology",
-      label: "Topologie",
-      value: "1 / 6 / 12",
-      detail: "solides / faces / arêtes",
-    },
-    { id: "mass", label: "Masse", value: "0.0027", unit: "kg" },
-    { id: "density", label: "Densité", value: "2,700", unit: "kg/m³" },
   ]);
+  assertEquals(geometryFactSections(data, "en-US"), [{
+    id: "geometry",
+    title: "Geometry",
+    items: [
+      {
+        id: "topology",
+        label: "Topology",
+        value: "1 solid · 6 faces · 12 edges",
+      },
+      {
+        id: "bounding-box",
+        label: "Bounding box",
+        value: "[0, 0, 0] → [10, 20, 5] mm",
+      },
+      {
+        id: "center-of-mass",
+        label: "Center of mass",
+        value: "[5, 10, 2.5] mm",
+      },
+      { id: "density", label: "Density", value: "2,700 kg/m³" },
+    ],
+  }]);
+  assertEquals(geometryProvenance(data), {
+    label: "GLTF artifact",
+    value: `sha256:${"d".repeat(64)}`,
+  });
+});
+
+Deno.test("results viewer formats numbers for the host locale, never the machine's", () => {
+  const parsed = parseGeometryResult({
+    schemaVersion: "1.0",
+    kind: "execution",
+    metrics: {
+      volume_mm3: 1234.5,
+      area_mm2: 1000,
+      solids: 2,
+      faces: 12,
+      // A count past the grouping threshold proves the locale reaches formatCount.
+      edges: 1200,
+    },
+    files: [],
+  });
+  if (!parsed.ok) throw new Error(parsed.error);
+  const data = { result: parsed.value };
+  assertEquals(
+    geometryReadings(data, "de-DE").map((reading) => reading.value),
+    ["1.234,5", "1.000"],
+  );
+  assertEquals(geometryIdentity(data, "de-DE"), {
+    marker: "computed",
+    label: "Computed geometry",
+    detail: "build123d · 2 solids · 12 faces · 1.200 edges",
+    tone: "success",
+  });
+  assertEquals(
+    geometryFactSections(data, "en-US")[0].items[0].value,
+    "2 solids · 12 faces · 1,200 edges",
+  );
+  assertEquals(geometryReference(data), {
+    domain: "build123d",
+    kind: "execution",
+    id: "execution",
+    basisFingerprint: undefined,
+  });
+  assertEquals(geometryProvenance(data), undefined);
+  assertEquals(formatBytes(512, "en-US"), "512 B");
+  assertEquals(formatBytes(77_000, "en-US"), "75.2 KB");
+  assertEquals(formatBytes(77_000, "de-DE"), "75,2 KB");
+  assertEquals(formatBytes(3 * 1024 * 1024, "en-US"), "3.0 MB");
 });
 
 Deno.test("results viewer lifecycle errors remain escaped HTML", () => {
@@ -263,13 +329,17 @@ Deno.test("result viewer uses the standard resource client and shared components
   assertStringIncludes(styles, "container: build123d-view / inline-size");
   for (
     const shared of [
+      "ArtifactRow",
       "Badge",
       "Button",
       "Card",
-      "DataTable",
+      "ElementProvenance",
+      "ElementSection",
       "EmptyState",
       "KeyValueList",
       "MetricGrid",
+      "SemanticElement",
+      "Slot3D",
       "StateMessage",
       "Toolbar",
     ]
