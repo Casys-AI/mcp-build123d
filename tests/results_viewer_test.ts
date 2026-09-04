@@ -1,10 +1,15 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import {
+  BUILD123D_CANONICAL_GEOMETRY_TOOL,
+  BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
+  type Build123dRecordedResourceReader,
+  parseBuild123dViewerSession,
+} from "../src/ui/recorded-view-session.ts";
+import {
   decodeGltfArtifact,
   type ExportArtifact,
   parseGeometryResult,
 } from "../src/ui/results-viewer/src/contract.ts";
-import { renderViewer } from "../src/ui/results-viewer/src/render.ts";
 import {
   BUILD123D_COMPONENT_KEYS,
   BUILD123D_DEFAULT_SURFACE,
@@ -15,6 +20,13 @@ import {
   geometryReadings,
   geometryReference,
 } from "../src/ui/results-viewer/src/component-model.ts";
+import {
+  geometryStateFromToolResult,
+  geometryStateFromViewerSession,
+  RESULT_REJECTED_CODE,
+  SESSION_REJECTED_CODE,
+  TOOL_ERROR_CODE,
+} from "../src/ui/results-viewer/src/projection.ts";
 
 const METRICS = {
   volume_mm3: 1000,
@@ -308,15 +320,146 @@ Deno.test("results viewer formats numbers for the host locale, never the machine
   assertEquals(formatBytes(3 * 1024 * 1024, "en-US"), "3.0 MB");
 });
 
-Deno.test("results viewer lifecycle errors remain escaped HTML", () => {
-  const errorHtml = renderViewer({
-    phase: "error",
-    message: "<script>alert(1)</script>",
+Deno.test("a tool error projects the MCP text block as a computation failure", () => {
+  assertEquals(
+    geometryStateFromToolResult({
+      isError: true,
+      content: [{ type: "text", text: "boom" }],
+    }),
+    {
+      kind: "error",
+      code: TOOL_ERROR_CODE,
+      message: "boom",
+      title: "Computation failed",
+    },
+  );
+});
+
+Deno.test("a tool error without a text block uses the default computation-failed message", () => {
+  assertEquals(geometryStateFromToolResult({ isError: true }), {
+    kind: "error",
+    code: TOOL_ERROR_CODE,
+    message: "The build123d computation returned an error.",
+    title: "Computation failed",
   });
-  assertEquals(errorHtml.includes("<script>alert"), false);
-  assertStringIncludes(errorHtml, "&lt;script&gt;alert(1)&lt;/script&gt;");
-  assertStringIncludes(renderViewer({ phase: "loading" }), 'aria-busy="true"');
-  assertStringIncludes(renderViewer({ phase: "empty" }), 'aria-busy="false"');
+});
+
+Deno.test("an invalid tool envelope is rejected as not displayable", () => {
+  const envelope = {
+    schemaVersion: "1.0",
+    kind: "export",
+    metrics: METRICS,
+    files: [{
+      format: "gltf",
+      path: "/exports/assembly.glb",
+      bytes: 12,
+      sha256: "b".repeat(64),
+    }],
+  };
+  const parsed = parseGeometryResult(envelope);
+  assertEquals(parsed.ok, false);
+  if (parsed.ok) return;
+  assertEquals(geometryStateFromToolResult({ structuredContent: envelope }), {
+    kind: "error",
+    code: RESULT_REJECTED_CODE,
+    title: "Result not displayable",
+    message: parsed.error,
+  });
+});
+
+Deno.test("a valid tool envelope projects as a geometry result", () => {
+  const envelope = {
+    schemaVersion: "1.0",
+    kind: "execution",
+    metrics: METRICS,
+    files: [],
+  };
+  const parsed = parseGeometryResult(envelope);
+  assertEquals(parsed.ok, true);
+  if (!parsed.ok) return;
+  assertEquals(geometryStateFromToolResult({ structuredContent: envelope }), {
+    kind: "result",
+    result: { result: parsed.value },
+  });
+});
+
+Deno.test("an invalid viewer session is rejected", () => {
+  const reader: Build123dRecordedResourceReader = () =>
+    Promise.resolve({ ok: false, error: "unused" });
+  const parsed = parseBuild123dViewerSession({ kind: "not-a-session" });
+  assertEquals(parsed.ok, false);
+  if (parsed.ok) return;
+  assertEquals(
+    geometryStateFromViewerSession({ kind: "not-a-session" }, reader),
+    {
+      kind: "error",
+      code: SESSION_REJECTED_CODE,
+      title: "Session rejected",
+      message: parsed.error,
+    },
+  );
+});
+
+Deno.test("a valid viewer session projects with the given resource reader", () => {
+  const reader: Build123dRecordedResourceReader = () =>
+    Promise.resolve({ ok: false, error: "unused" });
+  const capture = `sha256:${"a".repeat(64)}` as const;
+  const glb = `sha256:${"b".repeat(64)}` as const;
+  const session = {
+    schemaVersion: BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
+    kind: "recorded-canonical-geometry",
+    basis: {
+      projectId: "project-tps03",
+      projectRevision: 24,
+      subjectId: "two-piece-tablet-stand",
+      thread: { id: "thread-tps03", revision: 19 },
+    },
+    anchor: { kind: "part-definition", id: "TabletStand" },
+    provenance: {
+      canonicalCapture: {
+        artifactId: `geometry-${capture.slice(7)}`,
+        artifactVersion: capture.slice(7),
+        artifactFingerprint: capture,
+        producer: {
+          serverId: "digital-thread",
+          tool: BUILD123D_CANONICAL_GEOMETRY_TOOL,
+          runId: "geometry-run-r19",
+        },
+      },
+    },
+    projection: {
+      status: "available" as const,
+      artifact: {
+        artifactId: `cad-asset-capture-glb-${glb.slice(7)}`,
+        artifactVersion: glb.slice(7),
+        artifactFingerprint: glb,
+        producer: {
+          serverId: "build123d-sandbox",
+          tool: "build123d_export",
+          runId: "preview-run-r19",
+        },
+      },
+      resourceFingerprint: glb,
+    },
+  };
+  const parsed = parseBuild123dViewerSession(session);
+  assertEquals(parsed.ok, true);
+  if (!parsed.ok) return;
+  const state = geometryStateFromViewerSession(session, reader);
+  assertEquals(state.kind, "result");
+  if (state.kind !== "result") return;
+  assertEquals("source" in state.result, true);
+  if (!("source" in state.result)) return;
+  assertEquals(state.result.source, "viewer-session");
+  assertEquals(state.result.readResource === reader, true);
+  assertEquals(state, {
+    kind: "result",
+    result: {
+      source: "viewer-session",
+      session: parsed.value,
+      readResource: reader,
+    },
+  });
 });
 
 Deno.test("result viewer uses the standard resource client and shared components", async () => {

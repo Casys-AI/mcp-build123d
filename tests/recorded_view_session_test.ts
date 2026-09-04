@@ -29,11 +29,6 @@ import {
   MCP_APP_HOST_RESOURCE_READ_TYPE,
 } from "../src/ui/results-viewer/src/resource-bridge.ts";
 import {
-  commitLatestRender,
-  commitLatestStagedRender,
-  createLatestRenderGate,
-} from "../src/ui/results-viewer/src/render-generation.ts";
-import {
   BUILD123D_GEOMETRY_RESULT_SCHEMA,
   BUILD123D_MCP_APP_INFO,
   BUILD123D_VIEW_APP_MANIFEST,
@@ -715,97 +710,6 @@ Deno.test("namespaced geometry result identity maps to the unchanged execution/e
   ]);
 });
 
-Deno.test("recorded view generations reject stale async completion and teardown", async () => {
-  const gate = createLatestRenderGate();
-  const stale = gate.next();
-  const release = Promise.withResolvers<void>();
-  const mutations: string[] = [];
-  const staleCompletion = release.promise.then(() => {
-    if (gate.isCurrent(stale)) mutations.push("stale-error");
-  });
-
-  const current = gate.next();
-  release.resolve();
-  await staleCompletion;
-  assertEquals(mutations, []);
-  assertEquals(gate.isCurrent(stale), false);
-  assertEquals(gate.isCurrent(current), true);
-
-  gate.dispose();
-  assertEquals(gate.isCurrent(current), false);
-});
-
-Deno.test("a replacement arriving during a delayed mount disposes A and commits only B", async () => {
-  const gate = createLatestRenderGate();
-  const delayedA = Promise.withResolvers<{ readonly id: "A" }>();
-  const commits: string[] = [];
-  const disposals: string[] = [];
-  const generationA = gate.next();
-  const mountingA = commitLatestRender({
-    gate,
-    generation: generationA,
-    load: () => delayedA.promise,
-    commit: (mount) => commits.push(mount.id),
-    discard: (mount) => {
-      disposals.push(mount.id);
-    },
-  });
-
-  const generationB = gate.next();
-  delayedA.resolve({ id: "A" });
-  assertEquals(await mountingA, false);
-  assertEquals(commits, []);
-  assertEquals(disposals, ["A"]);
-
-  const mountingB = commitLatestRender({
-    gate,
-    generation: generationB,
-    load: () => Promise.resolve({ id: "B" as const }),
-    commit: (mount) => commits.push(mount.id),
-    discard: (mount) => {
-      disposals.push(mount.id);
-    },
-  });
-  assertEquals(await mountingB, true);
-  assertEquals(commits, ["B"]);
-  assertEquals(disposals, ["A"]);
-});
-
-Deno.test("a stale eager mount mutates staging but never the committed DOM model", async () => {
-  const gate = createLatestRenderGate();
-  const delayed = Promise.withResolvers<{ readonly id: "A" }>();
-  const committedNodes: string[] = ["previous"];
-  const stagedNodes: string[][] = [];
-  const disposals: string[] = [];
-  const generationA = gate.next();
-  const mountingA = commitLatestStagedRender({
-    gate,
-    generation: generationA,
-    createStage() {
-      const stage: string[] = [];
-      stagedNodes.push(stage);
-      return stage;
-    },
-    async load(stage) {
-      stage.push("A-eager-mutation");
-      return await delayed.promise;
-    },
-    commit(stage) {
-      committedNodes.splice(0, committedNodes.length, ...stage);
-    },
-    discard(_stage, mount) {
-      disposals.push(mount.id);
-    },
-  });
-
-  gate.next();
-  delayed.resolve({ id: "A" });
-  assertEquals(await mountingA, false);
-  assertEquals(stagedNodes, [["A-eager-mutation"]]);
-  assertEquals(committedNodes, ["previous"]);
-  assertEquals(disposals, ["A"]);
-});
-
 Deno.test("direct tool results preserve host-selected surface ownership", () => {
   const parsed = parseGeometryResult({
     schemaVersion: "1.0",
@@ -1022,20 +926,34 @@ Deno.test("pre-MRTR review surface stays provisional and omits canonical metrics
   });
 });
 
-Deno.test("direct viewer advertises components and remounts only direct host-selected surfaces", async () => {
+Deno.test("viewer error text reaches the DOM as text nodes, never as markup", async () => {
+  const main = await Deno.readTextFile(
+    new URL("../src/ui/results-viewer/src/main.ts", import.meta.url),
+  );
+  // The kit status renderer builds elements; the connect failure goes through it too.
+  assertStringIncludes(main, "root.replaceChildren(renderStatusMessage(");
+  assertEquals(main.includes("innerHTML"), false);
+  assertEquals(main.includes("insertAdjacentHTML"), false);
+  assertEquals(main.includes("dangerouslySetInnerHTML"), false);
+});
+
+Deno.test("direct viewer mounts the kit surface App with data-owned surface selection", async () => {
   const main = await Deno.readTextFile(
     new URL("../src/ui/results-viewer/src/main.ts", import.meta.url),
   );
   const components = await Deno.readTextFile(
     new URL("../src/ui/results-viewer/src/components.tsx", import.meta.url),
   );
-  assertStringIncludes(main, "componentCatalogCapabilities(");
-  assertStringIncludes(main, "readSurfaceContext(handle.ctx.hostContext)");
-  assertStringIncludes(main, 'addEventListener("hostcontextchanged"');
-  assertStringIncludes(main, "viewerSessionActive ||");
-  assertStringIncludes(main, "isViewerSessionGeometryData(currentData)");
-  assertStringIncludes(main, "const surface = geometrySurfaceOverride(data);");
-  assertStringIncludes(main, "JSON.stringify(mounted.surface)");
+  assertStringIncludes(main, "startPreactSurfaceApp(");
+  assertStringIncludes(main, "surfaceFor: geometrySurfaceOverride");
+  assertStringIncludes(main, "fromToolResult: geometryStateFromToolResult");
+  assertStringIncludes(main, "strict: true");
+  assertStringIncludes(main, "info: BUILD123D_MCP_APP_INFO");
+  assertStringIncludes(main, "registry: BUILD123D_COMPONENT_REGISTRY");
+  assertStringIncludes(main, 'from "@casys/mcp-view-components/preact"');
+  assertEquals(main.includes("@casys/mcp-view/preact"), false);
+  assertEquals(main.includes("componentCatalogCapabilities("), false);
+  assertEquals(main.includes('addEventListener("hostcontextchanged"'), false);
   assertStringIncludes(components, "defaultSurface: BUILD123D_DEFAULT_SURFACE");
   assertStringIncludes(
     components,
@@ -1044,7 +962,7 @@ Deno.test("direct viewer advertises components and remounts only direct host-sel
   assertEquals(components.includes("@casys/mcp-view/preact"), false);
 });
 
-Deno.test("recorded viewer uses its fixed whole-view surface and generation-gated bridge", async () => {
+Deno.test("recorded viewer projects sessions through the kit and owns its resource bridge", async () => {
   const main = await Deno.readTextFile(
     new URL("../src/ui/results-viewer/src/main.ts", import.meta.url),
   );
@@ -1055,31 +973,37 @@ Deno.test("recorded viewer uses its fixed whole-view surface and generation-gate
     new URL("../src/ui/recorded-view-session.ts", import.meta.url),
   );
   assertStringIncludes(main, "viewerSession:");
-  assertStringIncludes(main, "info: BUILD123D_MCP_APP_INFO");
-  assertStringIncludes(main, "createMcpAppHostResourceBridge");
-  assertStringIncludes(main, "readResource: appHostResourceBridge.read");
-  assertStringIncludes(main, "if (!isCurrentRender(sequence)) return;");
-  assertStringIncludes(main, "showStateForRender(app");
-  assertStringIncludes(main, "viewerSessionActive = true;");
+  assertStringIncludes(
+    main,
+    "validate: (_value: unknown): _value is unknown => true",
+  );
+  assertStringIncludes(main, "toState: (value) =>");
+  assertStringIncludes(
+    main,
+    "geometryStateFromViewerSession(value, appHostResourceBridge.read)",
+  );
+  assertEquals(
+    main.indexOf("createMcpAppHostResourceBridge({") <
+      main.indexOf("startPreactSurfaceApp("),
+    true,
+  );
+  const teardownIndex = main.indexOf("onTeardown()");
+  assertEquals(teardownIndex >= 0, true);
+  assertStringIncludes(
+    main.slice(teardownIndex, main.indexOf("onError:", teardownIndex)),
+    "appHostResourceBridge.dispose()",
+  );
   assertStringIncludes(main, 'addEventListener("pagehide", onPageHide');
   assertStringIncludes(
     main,
     'globalThis.parent.postMessage(message, "*", [port])',
   );
   assertEquals(main.includes('addEventListener("message"'), false);
-  assertEquals(
-    main.indexOf("createMcpAppHostResourceBridge({") <
-      main.indexOf("createMcpApp<"),
-    true,
-  );
-  assertStringIncludes(main, "const renderSequence = beginRender();");
-  assertStringIncludes(main, "sessionSequence.renderSequence");
-  assertStringIncludes(main, "commitLatestStagedRender({");
-  assertStringIncludes(
-    main,
-    'createStage: () => document.createElement("div")',
-  );
-  assertStringIncludes(main, "root.replaceChildren(...nodes)");
+  assertEquals(main.includes("beginRender("), false);
+  assertEquals(main.includes("commitLatestStagedRender("), false);
+  assertEquals(main.includes("isCurrentRender("), false);
+  assertEquals(main.includes("showStateForRender("), false);
+  assertEquals(main.includes("viewerSessionActive"), false);
   assertStringIncludes(components, "loadBuild123dRecordedGltf(");
   assertStringIncludes(components, "context.app.readServerResource");
   assertStringIncludes(components, "Canonical Thread evidence");
