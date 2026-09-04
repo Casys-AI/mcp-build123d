@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.0",
+  "kind": "export",
+  "metrics": {
+    "volume_mm3": 19075.29203070318,
+    "area_mm2": 9144.61941887488,
+    "center_of_mass_mm": [
+      6.499871317302821E-16,
+      6.786126490969725,
+      5.730509891244675
+    ],
+    "bounding_box_mm": {
+      "min": [
+        -30,
+        -20,
+        -2.5
+      ],
+      "max": [
+        30,
+        20,
+        27.5
+      ],
+      "size": [
+        60,
+        40,
+        30
+      ]
+    },
+    "solids": 1,
+    "faces": 18,
+    "edges": 36,
+    "density_kg_m3": 2700,
+    "mass_kg": 0.0515032884828986
+  },
+  "files": [
+    {
+      "format": "step",
+      "artifact": {
+        "schemaVersion": "build123d-export-artifact/1.0",
+        "uri": "casys://build123d/artifacts/3fa35a005c4713a85f8f9e50f3b3bda59baa50c4600e411d7f2a099a7a1b9ba8.step",
+        "format": "step",
+        "mimeType": "model/step",
+        "bytes": 45840,
+        "sha256": "3fa35a005c4713a85f8f9e50f3b3bda59baa50c4600e411d7f2a099a7a1b9ba8"
+      }
+    },
+    {
+      "format": "gltf",
+      "artifact": {
+        "schemaVersion": "build123d-export-artifact/1.0",
+        "uri": "casys://build123d/artifacts/fc95d6c4c6ea3aacc23095f0454f4f759683629d28451feccc155f2e106d7176.glb",
+        "format": "gltf",
+        "mimeType": "model/gltf-binary",
+        "bytes": 77000,
+        "sha256": "fc95d6c4c6ea3aacc23095f0454f4f759683629d28451feccc155f2e106d7176"
+      }
+    }
+  ]
+}

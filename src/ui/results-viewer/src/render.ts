@@ -20,13 +20,13 @@ function escapeHtml(value: string): string {
 /** Render only lifecycle states; real geometry is mounted as a component surface. */
 export function renderViewer(state: ViewerState): string {
   const copy = state.phase === "loading"
-    ? ["Connexion à l’instrument", "Réception du résultat de calcul…"]
+    ? ["Connecting to the instrument", "Receiving a build123d geometry result…"]
     : state.phase === "empty"
     ? [
-      "En attente d’une mesure",
-      "Lancez build123d_execute ou build123d_export pour afficher le résultat exact.",
+      "Waiting for a measurement",
+      "Run build123d_execute or build123d_export to show the exact result.",
     ]
-    : ["Résultat non affichable", state.message ?? "Erreur inconnue"];
+    : ["Result not displayable", state.message ?? "Unknown error"];
   return `<main class="mcp-view-state lifecycle-state" data-tone="${
     state.phase === "error" ? "danger" : "info"
   }" aria-busy="${state.phase === "loading"}" aria-live="polite"><strong>${

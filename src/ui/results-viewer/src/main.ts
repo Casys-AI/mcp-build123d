@@ -245,7 +245,7 @@ async function boot(): Promise<void> {
             phase: "error",
             message: error instanceof Error
               ? error.message
-              : "La projection de géométrie n’a pas pu être montée.",
+              : "The geometry projection could not be mounted.",
           }, sequence);
         }
       },
@@ -275,7 +275,7 @@ async function boot(): Promise<void> {
         await showState(handle, {
           phase: "error",
           message: mcpErrorText(params.content) ??
-            "Le calcul build123d a retourné une erreur.",
+            "The build123d computation returned an error.",
         });
         return;
       }
@@ -330,7 +330,7 @@ async function boot(): Promise<void> {
         phase: "error",
         message: error instanceof Error
           ? error.message
-          : "La surface de composants n’a pas pu être montée.",
+          : "The component surface could not be mounted.",
       }, sequence);
     });
   };
@@ -355,7 +355,7 @@ boot().catch((error) => {
     phase: "error",
     message: error instanceof Error
       ? error.message
-      : "Connexion au MCP Apps host impossible.",
+      : "Could not connect to the MCP Apps host.",
   });
   root.setAttribute("aria-busy", "false");
 });

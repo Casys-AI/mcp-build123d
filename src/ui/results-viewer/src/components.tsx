@@ -2,17 +2,22 @@
 
 import { defineComponentRegistry } from "@casys/mcp-view-components";
 import {
+  ArtifactRow,
   Badge,
   Button,
   Card,
-  DataTable,
-  type DataTableColumn,
   definePreactComponent,
+  ElementBody,
+  ElementIdent,
+  ElementProvenance,
+  ElementSection,
   EmptyState,
   KeyValueList,
   MetricGrid,
   type PreactSurfaceComponentProps,
   type PreactSurfaceContext,
+  SemanticElement,
+  Slot3D,
   StateMessage,
   Toolbar,
 } from "@casys/mcp-view-components/preact";
@@ -25,9 +30,16 @@ import { decodeGltfArtifact, type ExportFile } from "./contract.ts";
 import {
   BUILD123D_COMPONENT_KEYS,
   BUILD123D_DEFAULT_SURFACE,
+  formatBytes,
+  formatCount,
   type GeometryComponentData,
-  geometryMetricValues,
-  geometryStatusValue,
+  type GeometryFact,
+  type GeometryFactSection,
+  geometryFactSections,
+  geometryIdentity,
+  geometryProvenance,
+  geometryReadings,
+  geometryReference,
   isCanonicalRecordedSession,
   isGeometryReviewSession,
   isViewerSessionGeometryData,
@@ -36,96 +48,174 @@ import { type CadSceneController, mountCadScene } from "./scene.ts";
 
 type Props = PreactSurfaceComponentProps<GeometryComponentData>;
 
-const GeometryStatus = ({ data }: Props) => {
-  const status = geometryStatusValue(data);
-  if (isViewerSessionGeometryData(data)) {
-    const session = data.session;
-    if (isGeometryReviewSession(session)) {
-      return (
-        <Card
-          title="Geometry review"
-          eyebrow="Project draft · no canonical or proof authority"
-          actions={<Badge tone={status.tone}>{status.label}</Badge>}
-        >
-          <KeyValueList
-            items={[
-              { id: "summary", label: "Projection", value: status.detail },
-              {
-                id: "basis",
-                label: "Project basis",
-                value:
-                  `${session.basis.projectId} r${session.basis.projectRevision} · ${session.basis.subjectId}`,
-              },
-              {
-                id: "anchor",
-                label: "Review",
-                value:
-                  `${session.anchor.id} · r${session.anchor.revision} · ${session.anchor.fingerprint}`,
-              },
-            ]}
-          />
-        </Card>
-      );
-    }
-    return (
-      <Card
-        title="Recorded geometry projection"
-        eyebrow="Digital Thread · exact recorded basis"
-        actions={<Badge tone={status.tone}>{status.label}</Badge>}
-      >
-        <KeyValueList
-          items={[
-            { id: "summary", label: "Projection", value: status.detail },
-            {
-              id: "basis",
-              label: "Basis",
-              value:
-                `${session.basis.projectId} r${session.basis.projectRevision} · ${session.basis.thread.id} r${session.basis.thread.revision}`,
-            },
-            {
-              id: "anchor",
-              label: "Anchor",
-              value: `${session.anchor.kind}:${session.anchor.id}`,
-            },
-          ]}
-        />
-      </Card>
-    );
-  }
-  const result = data.result;
+/**
+ * Standalone default and viewer-session surface: one bounded datasheet with an
+ * identity line, at most four readings, the 3D model, titled fact sections and
+ * one provenance line. The four small components below slice the same model
+ * for Compose hosts.
+ */
+const GeometryDatasheet = ({ data, context }: Props) => {
+  const locale = context.hostContext.locale;
+  const identity = geometryIdentity(data, locale);
+  const readings = geometryReadings(data, locale);
+  const provenance = geometryProvenance(data);
   return (
-    <Card
-      title="Geometry status"
-      eyebrow="build123d"
-      actions={<Badge tone={status.tone}>{status.label}</Badge>}
-    >
-      <KeyValueList
-        items={[
-          { id: "summary", label: "Result", value: status.detail },
-          {
-            id: "topology",
-            label: "Topology",
-            value:
-              `${result.metrics.solids} solids · ${result.metrics.faces} faces · ${result.metrics.edges} edges`,
-          },
-        ]}
-      />
+    <SemanticElement
+      className="geometry-datasheet"
+      reference={geometryReference(data)}
+      density="card"
+      ident={
+        <ElementIdent
+          marker={<Badge tone={identity.tone}>{identity.marker}</Badge>}
+          label={identity.label}
+          detail={identity.detail}
+        />
+      }
+      body={
+        <ElementBody>
+          {readings.length > 0 && (
+            <MetricGrid className="geometry-readings" items={readings} />
+          )}
+          <ElementSection title="3D model">
+            <GeometryScene data={data} context={context} />
+          </ElementSection>
+          <FactSections sections={geometryFactSections(data, locale)} />
+          {!isViewerSessionGeometryData(data) && (
+            <ElementSection title="Artifacts">
+              <Artifacts files={data.result.files} locale={locale} />
+            </ElementSection>
+          )}
+        </ElementBody>
+      }
+      provenance={provenance && (
+        <ElementProvenance label={provenance.label} value={provenance.value} />
+      )}
+    />
+  );
+};
+
+/** Reader-worded facts in one aligned column; the inspector layout is for field dumps. */
+const Facts = ({ items }: { readonly items: readonly GeometryFact[] }) => (
+  <KeyValueList layout="facts" items={items} />
+);
+
+const FactSections = (
+  { sections }: { readonly sections: readonly GeometryFactSection[] },
+) => (
+  <>
+    {sections.map((section) => (
+      <ElementSection key={section.id} title={section.title}>
+        <Facts items={section.items} />
+      </ElementSection>
+    ))}
+  </>
+);
+
+/** One row per sealed export; verification is displayed from the result, never inferred. */
+const Artifacts = (
+  { files, locale }: {
+    readonly files: readonly ExportFile[];
+    readonly locale: string | undefined;
+  },
+) =>
+  files.length > 0
+    ? (
+      <div class="geometry-artifacts">
+        {files.map((file) => (
+          <ArtifactRow
+            key={`${file.format}:${file.artifact.sha256}`}
+            kind={file.format.toUpperCase()}
+            label={file.artifact.mimeType}
+            uri={file.artifact.uri}
+            fingerprint={{ algorithm: "sha256", digest: file.artifact.sha256 }}
+            sizeLabel={formatBytes(file.artifact.bytes, locale)}
+          />
+        ))}
+      </div>
+    )
+    : (
+      <EmptyState>
+        No export for this calculation. Use build123d_export to produce STEP,
+        STL or GLB files.
+      </EmptyState>
+    );
+
+const GeometryStatus = ({ data, context }: Props) => {
+  const identity = geometryIdentity(data, context.hostContext.locale);
+  const provenance = geometryProvenance(data);
+  return (
+    <SemanticElement
+      reference={geometryReference(data)}
+      density="row"
+      ident={
+        <ElementIdent
+          marker={<Badge tone={identity.tone}>{identity.marker}</Badge>}
+          label={identity.label}
+          detail={identity.detail}
+        />
+      }
+      provenance={provenance && (
+        <ElementProvenance label={provenance.label} value={provenance.value} />
+      )}
+    />
+  );
+};
+
+const GeometryMetrics = ({ data, context }: Props) => {
+  const locale = context.hostContext.locale;
+  return (
+    <Card title="Readings" eyebrow="Exact OCCT measures">
+      {isViewerSessionGeometryData(data)
+        ? (
+          <EmptyState>
+            No Build123d execution metrics are included in this read-only
+            geometry session.
+          </EmptyState>
+        )
+        : (
+          <>
+            <MetricGrid
+              className="geometry-readings"
+              items={geometryReadings(data, locale)}
+            />
+            <FactSections sections={geometryFactSections(data, locale)} />
+          </>
+        )}
     </Card>
   );
 };
 
-const GeometryMetrics = ({ data }: Props) => (
-  <Card title="Geometry metrics" eyebrow="Exact OCCT measures">
-    {isViewerSessionGeometryData(data)
-      ? (
-        <EmptyState>
-          No Build123d execution metrics are included in this read-only geometry
-          session.
-        </EmptyState>
-      )
-      : <MetricGrid items={geometryMetricValues(data)} />}
+const GeometryCanvas = ({ data, context }: Props) => (
+  <Card
+    title="3D model"
+    eyebrow={isViewerSessionGeometryData(data)
+      ? "Read-only projection"
+      : "Geometry inspection"}
+  >
+    <GeometryScene data={data} context={context} />
   </Card>
 );
+
+const ExportArtifacts = ({ data, context }: Props) =>
+  isViewerSessionGeometryData(data)
+    ? (
+      <Card
+        title="Provenance"
+        eyebrow={isGeometryReviewSession(data.session)
+          ? "Project draft · no canonical or proof claim"
+          : "Canonical Thread evidence"}
+      >
+        <FactSections sections={geometryFactSections(data)} />
+      </Card>
+    )
+    : (
+      <Card title="Artifacts" eyebrow="Immutable resources">
+        <Artifacts
+          files={data.result.files}
+          locale={context.hostContext.locale}
+        />
+      </Card>
+    );
 
 type CanvasPhase =
   | { kind: "loading"; detail: string }
@@ -139,7 +229,11 @@ type CanvasPhase =
   | { kind: "empty"; detail: string }
   | { kind: "error"; detail: string };
 
-const GeometryCanvas = ({ data, context }: Props) => {
+type SceneProps = Pick<Props, "data" | "context">;
+
+/** The Three.js stage in a kit Slot3D, with its controls and a literal status line. */
+const GeometryScene = ({ data, context }: SceneProps) => {
+  const locale = context.hostContext.locale;
   const viewerSession = isViewerSessionGeometryData(data)
     ? data.session
     : undefined;
@@ -150,9 +244,7 @@ const GeometryCanvas = ({ data, context }: Props) => {
   const canonicalSession = viewerSession !== undefined &&
     isCanonicalRecordedSession(viewerSession);
   const reviewSession = viewerSession !== undefined &&
-      isGeometryReviewSession(viewerSession)
-    ? viewerSession
-    : undefined;
+    isGeometryReviewSession(viewerSession);
   const gltf = !isViewerSessionGeometryData(data)
     ? data.result.files.find((file) => file.format === "gltf")
     : undefined;
@@ -239,300 +331,97 @@ const GeometryCanvas = ({ data, context }: Props) => {
     sessionProjection?.status,
   ]);
 
-  const controls = (
-    <Toolbar label="3D model controls">
-      <Button
-        disabled={phase.kind !== "ready"}
-        onClick={() => controller.current?.fit()}
-      >
-        Fit
-      </Button>
-      <Button
-        disabled={phase.kind !== "ready"}
-        onClick={() => controller.current?.reset()}
-      >
-        Reset
-      </Button>
-      <Button
-        disabled={phase.kind !== "ready"}
-        pressed={wireframe}
-        onClick={() =>
-          setWireframe((current) => {
-            const next = !current;
-            controller.current?.setWireframe(next);
-            return next;
-          })}
-      >
-        Wireframe
-      </Button>
-    </Toolbar>
-  );
+  const status = phase.kind === "ready"
+    ? `${viewerSession ? "Projection digest verified" : "Verified GLB"} · ${
+      formatBytes(phase.bytes, locale)
+    } · Orbit · Pan · Zoom`
+    : phase.kind === "loading"
+    ? "Loading the verified GLB resource…"
+    : phase.kind === "error"
+    ? "3D preview unavailable"
+    : "No interactive geometry";
 
   return (
-    <Card
-      className="model-panel"
-      title={canonicalSession
-        ? "Recorded GLB projection / 3D space"
-        : reviewSession
-        ? "Geometry review / 3D space"
-        : "Assembly / 3D space"}
-      eyebrow={canonicalSession
-        ? "Recorded read-only projection"
-        : reviewSession
-        ? `${reviewSession.status} Project projection · read-only`
-        : "Geometry inspection"}
-      actions={controls}
-    >
-      <div class="cad-stage">
-        <div
-          ref={viewport}
-          class="cad-viewport"
-          role="img"
-          aria-label={canonicalSession
-            ? "Interactive recorded GLB projection linked to Digital Thread geometry"
-            : reviewSession
-            ? "Interactive Project geometry review projection"
-            : "Interactive build123d 3D model"}
-        />
-        <div class="cad-reticle" aria-hidden="true" />
-        {phase.kind === "ready" && (
-          <div class="cad-hud" aria-live="polite">
-            <Badge tone="success">
-              {viewerSession ? "Projection digest verified" : "Verified GLB"}
-            </Badge>
-            <span>
-              {phase.meshes} mesh{phase.meshes === 1 ? "" : "es"} ·{" "}
-              {phase.nodes} nodes
-            </span>
-          </div>
-        )}
-        {phase.kind !== "ready" && (
-          <div class="cad-state-overlay">
-            <StateMessage
-              title={phase.kind === "loading"
-                ? "Loading interactive geometry"
-                : phase.kind === "error"
-                ? "3D preview unavailable"
-                : sessionProjection?.status === "unresolved"
-                ? "UNRESOLVED"
-                : sessionProjection?.status === "unavailable"
-                ? "UNAVAILABLE"
-                : "No interactive geometry"}
-              tone={phase.kind === "error"
-                ? "danger"
-                : phase.kind === "loading"
-                ? "info"
-                : "neutral"}
-            >
-              {phase.detail}
-            </StateMessage>
-          </div>
-        )}
-      </div>
-      <footer class="model-foot">
-        <span>
-          {canonicalSession
-            ? "Recorded · Orbit · Pan · Zoom"
-            : reviewSession
-            ? "Review · Orbit · Pan · Zoom"
-            : "Orbit · Pan · Zoom"}
-        </span>
-        <code>
-          {phase.kind === "ready"
-            ? phase.resourceUri
-            : sessionAvailable?.resourceFingerprint ??
-              gltf?.artifact.uri ?? "No GLB artifact"}
-        </code>
-        <span>
-          {phase.kind === "ready"
-            ? formatBytes(phase.bytes)
-            : gltf
-            ? formatBytes(gltf.artifact.bytes)
-            : "—"}
-        </span>
-      </footer>
-    </Card>
-  );
-};
-
-const artifactColumns: readonly DataTableColumn<ExportFile>[] = [
-  {
-    id: "format",
-    label: "Format",
-    render: (file) => <Badge tone="info">{file.format.toUpperCase()}</Badge>,
-  },
-  {
-    id: "resource",
-    label: "Resource",
-    render: (file) => <code>{file.artifact.uri}</code>,
-  },
-  {
-    id: "sha256",
-    label: "SHA-256",
-    render: (file) => <code>{file.artifact.sha256}</code>,
-  },
-  {
-    id: "bytes",
-    label: "Size",
-    align: "right",
-    render: (file) => formatBytes(file.artifact.bytes),
-  },
-];
-
-const ExportArtifacts = ({ data }: Props) => {
-  if (isViewerSessionGeometryData(data)) {
-    if (isGeometryReviewSession(data.session)) {
-      const { anchor, basis, projection, provenance, status } = data.session;
-      const draft = provenance.draftCapture;
-      return (
-        <Card
-          title="Review provenance"
-          eyebrow="Project draft · no canonical or proof claim"
+    <>
+      <Toolbar className="geometry-scene-controls" label="3D model controls">
+        <Button
+          disabled={phase.kind !== "ready"}
+          onClick={() => controller.current?.fit()}
         >
-          <KeyValueList
-            items={[
-              {
-                id: "review",
-                label: "Review identity",
-                value:
-                  `${anchor.id} · r${anchor.revision} · ${anchor.fingerprint}`,
-              },
-              {
-                id: "status",
-                label: "Review status",
-                value: status,
-              },
-              {
-                id: "draft",
-                label: "Draft capture",
-                value: `${draft.artifactId} · ${draft.artifactVersion}`,
-              },
-              {
-                id: "draft-fingerprint",
-                label: "Draft fingerprint",
-                value: draft.artifactFingerprint,
-              },
-              {
-                id: "draft-producer",
-                label: "Draft producer",
-                value:
-                  `${draft.producer.serverId} · ${draft.producer.tool} · ${draft.producer.runId}`,
-              },
-              {
-                id: "subject",
-                label: "Project subject",
-                value:
-                  `${basis.projectId} r${basis.projectRevision} · ${basis.subjectId}`,
-              },
-              ...(projection.status === "available"
-                ? [
-                  {
-                    id: "projection-artifact",
-                    label: "Review GLB",
-                    value:
-                      `${projection.artifact.artifactId} · ${projection.artifact.artifactVersion}`,
-                  },
-                  {
-                    id: "projection-fingerprint",
-                    label: "GLB fingerprint",
-                    value: projection.artifact.artifactFingerprint,
-                  },
-                  {
-                    id: "projection-producer",
-                    label: "GLB producer",
-                    value:
-                      `${projection.artifact.producer.serverId} · ${projection.artifact.producer.tool} · ${projection.artifact.producer.runId}`,
-                  },
-                ]
-                : [{
-                  id: "projection-reason",
-                  label: projection.status.toUpperCase(),
-                  value: projection.reason,
-                }]),
-            ]}
+          Fit
+        </Button>
+        <Button
+          disabled={phase.kind !== "ready"}
+          onClick={() => controller.current?.reset()}
+        >
+          Reset
+        </Button>
+        <Button
+          disabled={phase.kind !== "ready"}
+          pressed={wireframe}
+          onClick={() =>
+            setWireframe((current) => {
+              const next = !current;
+              controller.current?.setWireframe(next);
+              return next;
+            })}
+        >
+          Wireframe
+        </Button>
+      </Toolbar>
+      <Slot3D
+        label={canonicalSession
+          ? "Interactive recorded GLB projection linked to Digital Thread geometry"
+          : reviewSession
+          ? "Interactive Project geometry review projection"
+          : "Interactive build123d 3D model"}
+        statusLabel={status}
+      >
+        <div class="cad-stage">
+          <div
+            ref={viewport}
+            class="cad-viewport"
+            role="img"
+            aria-label={status}
           />
-        </Card>
-      );
-    }
-    const { basis, projection, provenance } = data.session;
-    const capture = provenance.canonicalCapture;
-    return (
-      <Card title="Recorded provenance" eyebrow="Canonical Thread evidence">
-        <KeyValueList
-          items={[
-            {
-              id: "artifact",
-              label: "Canonical capture",
-              value: `${capture.artifactId} · ${capture.artifactVersion}`,
-            },
-            {
-              id: "fingerprint",
-              label: "Capture fingerprint",
-              value: capture.artifactFingerprint,
-            },
-            {
-              id: "producer",
-              label: "Capture producer",
-              value: `${capture.producer.serverId} · ${capture.producer.tool}`,
-            },
-            {
-              id: "run",
-              label: "Capture run",
-              value: capture.producer.runId,
-            },
-            {
-              id: "subject",
-              label: "Subject",
-              value: `${basis.subjectId} · ${projection.status}`,
-            },
-            ...(projection.status === "available"
-              ? [
-                {
-                  id: "projection-artifact",
-                  label: "Projected GLB",
-                  value:
-                    `${projection.artifact.artifactId} · ${projection.artifact.artifactVersion}`,
-                },
-                {
-                  id: "projection-fingerprint",
-                  label: "GLB fingerprint",
-                  value: projection.artifact.artifactFingerprint,
-                },
-                {
-                  id: "projection-producer",
-                  label: "GLB producer",
-                  value:
-                    `${projection.artifact.producer.serverId} · ${projection.artifact.producer.tool} · ${projection.artifact.producer.runId}`,
-                },
-              ]
-              : [{
-                id: "projection-reason",
-                label: projection.status.toUpperCase(),
-                value: projection.reason,
-              }]),
-          ]}
-        />
-      </Card>
-    );
-  }
-  return (
-    <Card title="Export artifacts" eyebrow="Immutable resources">
-      {data.result.files.length > 0
-        ? (
-          <DataTable
-            label="Immutable build123d export artifacts"
-            rows={data.result.files}
-            columns={artifactColumns}
-            rowKey={(file) => `${file.format}:${file.artifact.sha256}`}
-          />
-        )
-        : (
-          <EmptyState>
-            No export for this calculation. Use build123d_export to produce
-            STEP, STL or GLB files.
-          </EmptyState>
-        )}
-    </Card>
+          <div class="cad-reticle" aria-hidden="true" />
+          {phase.kind === "ready" && (
+            <div class="cad-hud" aria-live="polite">
+              <Badge tone="success">
+                {viewerSession ? "Projection digest verified" : "Verified GLB"}
+              </Badge>
+              <span>
+                {formatCount(phase.meshes, locale)}{" "}
+                {phase.meshes === 1 ? "mesh" : "meshes"} ·{" "}
+                {formatCount(phase.nodes, locale)}{" "}
+                {phase.nodes === 1 ? "node" : "nodes"}
+              </span>
+            </div>
+          )}
+          {phase.kind !== "ready" && (
+            <div class="cad-state-overlay">
+              <StateMessage
+                title={phase.kind === "loading"
+                  ? "Loading interactive geometry"
+                  : phase.kind === "error"
+                  ? "3D preview unavailable"
+                  : sessionProjection?.status === "unresolved" ||
+                      sessionProjection?.status === "unavailable"
+                  ? `Projection ${sessionProjection.status}`
+                  : "No interactive geometry"}
+                tone={phase.kind === "error"
+                  ? "danger"
+                  : phase.kind === "loading"
+                  ? "info"
+                  : "neutral"}
+              >
+                {phase.detail}
+              </StateMessage>
+            </div>
+          )}
+        </div>
+      </Slot3D>
+    </>
   );
 };
 
@@ -541,6 +430,14 @@ export const BUILD123D_COMPONENT_REGISTRY = defineComponentRegistry<
   PreactSurfaceContext<GeometryComponentData>
 >({
   components: {
+    [BUILD123D_COMPONENT_KEYS.datasheet]: definePreactComponent(
+      {
+        title: "Geometry datasheet",
+        description:
+          "One geometry identity with its primary readings, the interactive verified GLB, titled facts and exact provenance.",
+      },
+      GeometryDatasheet,
+    ),
     [BUILD123D_COMPONENT_KEYS.status]: definePreactComponent(
       {
         title: "Geometry status",
@@ -575,12 +472,6 @@ export const BUILD123D_COMPONENT_REGISTRY = defineComponentRegistry<
   },
   defaultSurface: BUILD123D_DEFAULT_SURFACE,
 });
-
-function formatBytes(value: number): string {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function initialCanvasPhase(
   projection: Build123dRecordedGeometryProjection | undefined,

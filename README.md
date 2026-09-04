@@ -27,6 +27,13 @@ agent writes build123d script
 exact STEP bytes ──► build123d_observe_assembly_integrity ──► factual XCAF/OCCT assembly observation
 ```
 
+![build123d_export result in the MCP App viewer](docs/assets/build123d-export-viewer.png)
+
+This is the shipped viewer rendering a real `build123d_export` result
+(`docs/fixtures/bracket-r1.py`, run in the published provider image)—not a mock
+dashboard. `deno task capture:docs` regenerates it from the committed fixture
+and bundle.
+
 At a glance:
 
 - Parametric solids, sketches, extrusions, revolves, sweeps, lofts, booleans,
@@ -324,24 +331,28 @@ wireframe inspection.
 
 ### Compose components
 
-The same standalone viewer advertises a catalog of small, independently
-mountable components during `ui/initialize`. An MCP Compose dashboard chooses a
+The same standalone viewer advertises a catalog of independently mountable
+components during `ui/initialize`. An MCP Compose dashboard chooses a
 declarative surface (component subset, order, grid and gap); without a requested
-surface, standalone mode mounts the default component stack.
+surface, standalone mode mounts the default surface: one bounded geometry
+datasheet. A recorded viewer session always mounts that same datasheet.
 
 Every component is a Preact component built from the optional
-`@casys/mcp-view-components` presentation runtime and primitives (`Card`,
-`Badge`, `MetricGrid`, `KeyValueList`, `DataTable`, `Button`, `Toolbar` and
-system states). The lifecycle/router remains in renderer-neutral
+`@casys/mcp-view-components` presentation runtime and primitives
+(`SemanticElement` with its ident, section and provenance slots, `MetricGrid`,
+`KeyValueList`, `ArtifactRow`, `Slot3D`, `Card`, `Badge`, `Button`, `Toolbar`
+and system states). The lifecycle/router remains in renderer-neutral
 `@casys/mcp-view`; the local stylesheet owns only the Three.js viewport and
-CAD-specific responsive layout.
+CAD-specific responsive layout. Numbers follow the host `locale` from
+`ui/initialize`, never the viewing machine's setting.
 
-| Component key                | Real data and behaviour                                           |
-| ---------------------------- | ----------------------------------------------------------------- |
-| `build123d.geometry-status`  | computation/export status and SHA-256 artifact identity           |
-| `build123d.geometry-metrics` | OCCT metrics, topology, optional mass and density                 |
-| `build123d.geometry-canvas`  | verified GLB resource plus interactive Three.js scene and cleanup |
-| `build123d.export-artifacts` | immutable resource URIs, digests, MIME types and byte sizes       |
+| Component key                  | Real data and behaviour                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `build123d.geometry-datasheet` | default surface: literal status, at most four readings, the verified 3D model, titled facts, artifacts, provenance |
+| `build123d.geometry-status`    | one-row identity: computation/export or session status with its provenance fingerprint                             |
+| `build123d.geometry-metrics`   | OCCT readings plus topology, bounding box, center of mass and optional density                                     |
+| `build123d.geometry-canvas`    | verified GLB resource plus interactive Three.js scene and cleanup                                                  |
+| `build123d.export-artifacts`   | immutable resource URIs, digests, MIME types and byte sizes; session basis and capture provenance                  |
 
 Repeating a canvas component is supported: controls and Three.js cleanup are
 scoped to each surface instance. A resource URI identifies exact bytes; it does
@@ -364,11 +375,11 @@ shape unless a future, independently evidenced instance contract is introduced.
 ### Build the viewer
 
 The committed viewer bundle is a standalone HTML resource. Its source uses the
-new split lifecycle and presentation packages. That coordinated split is not
-published yet: the already-published `@casys/mcp-view@0.8.0` is immutable and
-does not represent this source layout, while `@casys/mcp-view-components` has no
-published release. The build therefore fails closed unless both audited module
-entries are supplied explicitly; it never silently mixes those identities:
+split lifecycle and presentation packages `@casys/mcp-view@0.9.2` and
+`@casys/mcp-view-components@0.6.0`, built from the `Casys-AI/mcp-server`
+worktree at commit `676a2c7379c6be9fe69a6b06da244178088b5e5a`. The build fails
+closed unless both audited module entries are supplied explicitly; it never
+silently mixes those identities:
 
 ```bash
 MCP_VIEW_MODULE=file:///absolute/path/to/mcp-server/packages/view/mod.ts \
@@ -386,6 +397,13 @@ script and can read only the exact GLB resource URI explicitly returned by
 `build123d_export`. `src/ui/dist/` is generated bundle output and is
 intentionally excluded from Deno source formatting; the viewer source remains
 covered by the normal format check.
+
+`deno task capture:docs` renders the committed bundle through a local
+documentation host (`scripts/capture-viewer-doc.ts`) with the real export
+fixture `docs/fixtures/bracket-r1.export.json` and its digest-checked GLB, in
+headless Chrome with software WebGL, and writes
+`docs/assets/build123d-export-viewer.png`. Set `CHROME_BIN` (and optionally
+`FFMPEG_BIN`) when the documented local executables are elsewhere.
 
 ### Script and geometry contract
 

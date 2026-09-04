@@ -18,24 +18,27 @@ body {
   container: build123d-view / inline-size;
 }
 
-.model-panel {
-  padding: 0;
-  overflow: hidden;
+.geometry-datasheet {
+  min-width: 0;
 }
 
-.model-panel > .mcp-view-card-header {
-  min-height: 4rem;
-  margin: 0;
-  padding: 0.75rem 0.85rem;
-  border-bottom: 1px solid var(--cad-line);
-  background: var(--mcp-view-subtle);
+.geometry-scene-controls {
+  justify-content: flex-end;
+  margin-bottom: 0.45rem;
+}
+
+.geometry-artifacts {
+  display: grid;
+  gap: 0.4rem;
 }
 
 .cad-stage {
   position: relative;
+  width: 100%;
   height: clamp(220px, 52vh, 440px);
   isolation: isolate;
   overflow: hidden;
+  border-radius: var(--mcp-view-radius);
   background: #100e0c;
 }
 
@@ -97,29 +100,6 @@ body {
   background: color-mix(in srgb, var(--mcp-view-panel) 88%, transparent);
 }
 
-.model-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  min-height: 2.4rem;
-  padding: 0.5rem 0.85rem;
-  border-top: 1px solid var(--cad-line);
-  color: var(--mcp-view-muted);
-  font: 0.65rem/1.25 var(--cad-mono);
-  text-transform: uppercase;
-}
-
-.model-foot code {
-  flex: 1;
-  overflow: hidden;
-  color: var(--mcp-view-muted);
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mcp-view-table code,
 .mcp-view-key-value dd {
   font-family: var(--cad-mono);
 }
@@ -129,18 +109,8 @@ body {
 }
 
 @container build123d-view (max-width: 620px) {
-  .model-foot {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .cad-stage {
     height: clamp(210px, 46vh, 340px);
-  }
-
-  .model-foot code {
-    max-width: 100%;
-    text-align: left;
   }
 }
 

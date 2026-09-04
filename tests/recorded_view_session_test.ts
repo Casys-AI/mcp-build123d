@@ -1,8 +1,11 @@
 import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import {
   BUILD123D_VIEWER_SESSION_SURFACE,
-  geometryMetricValues,
-  geometryStatusValue,
+  geometryFactSections,
+  geometryIdentity,
+  geometryProvenance,
+  geometryReadings,
+  geometryReference,
   geometrySurfaceOverride,
 } from "../src/ui/results-viewer/src/component-model.ts";
 import { parseGeometryResult } from "../src/ui/results-viewer/src/contract.ts";
@@ -287,12 +290,12 @@ Deno.test("recorded geometry session keeps unavailable and unresolved literal", 
     if (!parsed.ok) continue;
     assertEquals(parsed.value.projection, projection);
     assertEquals(
-      geometryStatusValue({
+      geometryIdentity({
         source: "viewer-session",
         session: parsed.value,
         readResource: unusedResourceReader,
-      }).label,
-      projection.status.toUpperCase(),
+      }).marker,
+      projection.status,
     );
   }
 });
@@ -836,18 +839,118 @@ Deno.test("recorded geometry owns a dedicated surface and never invents OCCT met
   );
   assertEquals(
     BUILD123D_VIEWER_SESSION_SURFACE.components.map((item) => item.component),
-    [
-      "build123d.geometry-status",
-      "build123d.geometry-canvas",
-      "build123d.export-artifacts",
-    ],
+    ["build123d.geometry-datasheet"],
   );
-  assertEquals(geometryMetricValues(data), []);
-  assertEquals(geometryStatusValue(data), {
-    label: "RECORDED",
-    detail: "Recorded GLB projection · SHA-256 bbbbbbbbbbbb…",
+  assertEquals(geometryReadings(data), []);
+  assertEquals(geometryIdentity(data), {
+    marker: "recorded",
+    label: "Recorded geometry projection",
+    detail:
+      "project-tps03 r24 · thread-tps03 r19 · part-definition:TabletStand",
     tone: "info",
   });
+  assertEquals(geometryReference(data), {
+    domain: "build123d",
+    kind: "recorded-canonical-geometry",
+    id: "part-definition:TabletStand",
+    basisFingerprint: "a".repeat(64),
+  });
+  assertEquals(geometryProvenance(data), {
+    label: "Canonical capture",
+    value: CAPTURE_FINGERPRINT,
+  });
+  const projection = parsed.value.projection;
+  if (projection.status !== "available") throw new Error(projection.status);
+  const { artifactId, artifactVersion } = projection.artifact;
+  const capture = parsed.value.provenance.canonicalCapture;
+  assertEquals(geometryFactSections(data), [
+    {
+      id: "basis",
+      title: "Thread basis",
+      items: [
+        { id: "project", label: "Project", value: "project-tps03 r24" },
+        { id: "subject", label: "Subject", value: "two-piece-tablet-stand" },
+        { id: "thread", label: "Thread", value: "thread-tps03 r19" },
+        { id: "anchor", label: "Anchor", value: "part-definition:TabletStand" },
+      ],
+    },
+    {
+      id: "canonical-capture",
+      title: "Canonical capture",
+      items: [
+        {
+          id: "capture",
+          label: "Artifact",
+          value: `${capture.artifactId} · ${capture.artifactVersion}`,
+        },
+        {
+          id: "capture-fingerprint",
+          label: "Fingerprint",
+          value: CAPTURE_FINGERPRINT,
+        },
+        {
+          id: "capture-producer",
+          label: "Producer",
+          value: `digital-thread · ${BUILD123D_CANONICAL_GEOMETRY_TOOL}`,
+        },
+        { id: "capture-run", label: "Run", value: "geometry-run-r19" },
+      ],
+    },
+    {
+      id: "projection",
+      title: "GLB projection",
+      items: [
+        { id: "projection-status", label: "Status", value: "available" },
+        {
+          id: "projection-artifact",
+          label: "Artifact",
+          value: `${artifactId} · ${artifactVersion}`,
+        },
+        {
+          id: "projection-fingerprint",
+          label: "Fingerprint",
+          value: GLB_FINGERPRINT,
+        },
+        {
+          id: "projection-producer",
+          label: "Producer",
+          value: "build123d-sandbox · build123d_export · preview-run-r19",
+        },
+      ],
+    },
+  ]);
+});
+
+Deno.test("an unresolved projection is stated as status and reason, never as a GLB", () => {
+  const parsed = parseBuild123dRecordedViewSession(
+    recordedSession({
+      status: "unresolved",
+      reason: "canonical-join-unresolved",
+    }),
+  );
+  if (!parsed.ok) throw new Error(parsed.error);
+  const data = {
+    source: "viewer-session" as const,
+    session: parsed.value,
+    readResource: unusedResourceReader,
+  };
+  const sections = geometryFactSections(data);
+  assertEquals(sections.map((section) => section.title), [
+    "Thread basis",
+    "Canonical capture",
+    "GLB projection",
+  ]);
+  assertEquals(sections[2].items, [
+    { id: "projection-status", label: "Status", value: "unresolved" },
+    {
+      id: "projection-reason",
+      label: "Reason",
+      value: "canonical-join-unresolved",
+    },
+  ]);
+  // Identity and provenance follow the canonical capture, not the projection.
+  assertEquals(geometryReference(data).basisFingerprint, "a".repeat(64));
+  assertEquals(geometryProvenance(data)?.value, CAPTURE_FINGERPRINT);
 });
 
 Deno.test("pre-MRTR review surface stays provisional and omits canonical metrics", () => {
@@ -864,11 +967,58 @@ Deno.test("pre-MRTR review surface stays provisional and omits canonical metrics
     geometrySurfaceOverride(data),
     BUILD123D_VIEWER_SESSION_SURFACE,
   );
-  assertEquals(geometryMetricValues(data), []);
-  assertEquals(geometryStatusValue(data), {
-    label: "PROVISIONAL",
-    detail: "Review GLB projection · SHA-256 bbbbbbbbbbbb…",
+  assertEquals(geometryReadings(data), []);
+  assertEquals(geometryIdentity(data), {
+    marker: "provisional",
+    label: "Geometry review",
+    detail: "project-tps03 r24 · two-piece-tablet-stand · review r24",
     tone: "warning",
+  });
+  // The review anchor, not any capture, is the identity of a pre-MRTR review.
+  assertEquals(geometryReference(data), {
+    domain: "build123d",
+    kind: "project-geometry-review",
+    id: "review-tps03-geometry-r24",
+    basisFingerprint: "d".repeat(64),
+  });
+  assertEquals(geometryProvenance(data), {
+    label: "Review anchor",
+    value: REVIEW_FINGERPRINT,
+  });
+  const draft = parsed.value.provenance.draftCapture;
+  const sections = geometryFactSections(data);
+  assertEquals(sections.map((section) => section.title), [
+    "Project basis",
+    "Draft capture",
+    "GLB projection",
+  ]);
+  assertEquals(sections[0].items, [
+    { id: "project", label: "Project", value: "project-tps03 r24" },
+    { id: "subject", label: "Subject", value: "two-piece-tablet-stand" },
+    {
+      id: "review",
+      label: "Review",
+      value: "review-tps03-geometry-r24 · r24",
+    },
+    { id: "status", label: "Status", value: "provisional" },
+  ]);
+  assertEquals(sections[1].items, [
+    {
+      id: "draft",
+      label: "Artifact",
+      value: `${draft.artifactId} · ${draft.artifactVersion}`,
+    },
+    { id: "draft-fingerprint", label: "Fingerprint", value: DRAFT_FINGERPRINT },
+    {
+      id: "draft-producer",
+      label: "Producer",
+      value: "build123d-sandbox · build123d_export · draft-run-r24",
+    },
+  ]);
+  assertEquals(sections[2].items[0], {
+    id: "projection-status",
+    label: "Status",
+    value: "available",
   });
 });
 
