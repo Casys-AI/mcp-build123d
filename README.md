@@ -375,9 +375,9 @@ shape unless a future, independently evidenced instance contract is introduced.
 ### Build the viewer
 
 The committed viewer bundle is a standalone HTML resource. Its source uses the
-split lifecycle and presentation packages `@casys/mcp-view@0.9.2` and
-`@casys/mcp-view-components@0.6.0`, built from the `Casys-AI/mcp-server`
-worktree at commit `676a2c7379c6be9fe69a6b06da244178088b5e5a`. The build fails
+split lifecycle and presentation packages `@casys/mcp-view@0.9.3` and
+`@casys/mcp-view-components@0.7.0`, built from the `Casys-AI/mcp-server`
+worktree at commit `59eeb3750d2049b8141b09d3a6f29f66f9d3c657`. The build fails
 closed unless both audited module entries are supplied explicitly; it never
 silently mixes those identities:
 
