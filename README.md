@@ -231,179 +231,18 @@ direct call to this standalone server.
 
 ## Tools and result viewer
 
-`build123d_execute` and `build123d_export` expose the same optional MCP App
-resource, `ui://mcp-build123d/results-viewer`. When its HTML bundle is present
-at `src/ui/dist/results-viewer/index.html`, compatible hosts can render the
-exact geometry result. Until then the server deliberately skips the resource and
-keeps the concise text response for every MCP client.
+`build123d_execute` and `build123d_export` provide a compact geometry datasheet
+in compatible MCP Apps hosts. Inspect the model with orbit, pan, zoom, fit,
+reset, and wireframe controls, alongside its measured geometry and export
+artifacts. Text responses remain available to every MCP client.
 
-The same App also owns the read-only presentation of canonical geometry already
-recorded by a Digital Thread. A compatible host sends the whole-view action
-`viewer.session.apply` with schema
-`io.casys.mcp-build123d.recorded-geometry-session/1.0`. That session is not a
-tool result: it carries the exact project/Thread basis, graph anchor, canonical
-`design.write-geometry@1` capture provenance, and a literal `available`,
-`unavailable`, or `unresolved` projection. The sealed canonical capture is a
-JSON Thread artifact. An available 3D projection therefore records a distinct
-sibling GLB artifact, its exact preview producer, and its own fingerprint; the
-App rejects any session that equates their fingerprints or artifact identity.
+The same viewer presents recorded Digital Thread geometry and provisional
+Project reviews, keeping their status and provenance visible. It uses MCP View
+components that a Compose host can also mount individually: geometry, readings,
+status, or artifacts.
 
-The same resource accepts the distinct pre-MRTR schema
-`io.casys.mcp-build123d.geometry-review-session/1.0` for an exact Project
-geometry review. Its basis contains the Project revision but no Thread claim;
-its `project-review` anchor binds the review id, that same revision, and exact
-SHA-256 fingerprint. The only admitted review statuses are literal `provisional`
-and `documentary`. A separate draft capture and optional GLB projection retain
-their exact identities and producers, but this session never claims canonical
-geometry, proof, an MRTR decision, or provider authority.
-
-The opaque-origin App frame requests either session's GLB by fingerprint only
-over one dedicated, document-scoped `MessagePort`. Before connecting, the App
-creates the `MessageChannel`, retains its endpoint, and transfers the host
-endpoint once with the exact `mcp-app-host.resource.port.offer` bootstrap. The
-host never offers or retransfers a port through the navigation-stable parent
-`WindowProxy`. Resource requests and bytes use only that channel, and the port
-closes at teardown/navigation. The App never chooses or fetches a URI. The host
-resolves only a resource registered on the exact viewer session, bounds and
-rehashes it, then returns its root-relative URI, MIME type, byte count and
-canonical base64. The App independently validates and rehashes those bytes
-before mounting its own orbit/pan/zoom scene. It never calls Build123d, a
-provider tool, an MCP resource, or the process-local artifact store in this
-mode, and it does not require `allow-same-origin`.
-
-The host must wait for the MCP Apps initialized notification before applying a
-session. The core `viewerSession` lifecycle installs its action subscription
-before the handshake and serializes delivery; the App additionally generation-
-gates whole-view mounts so an older asynchronous completion cannot replace a
-newer session. The host must separately register the projection fingerprint in
-its bounded `readResources` descriptor; otherwise the App reports the GLB
-transport as unavailable without rewriting the session's recorded domain status.
-
-`BUILD123D_VIEW_APP_MANIFEST` exports the matching App-owned declaration for
-`ui://mcp-build123d/results-viewer` with `ownership: "whole-view"`. Its two
-resource-level session schemas require no host-selected component surface and
-contain no endpoint, credential, tool argument, or host-routing policy. Direct
-tool-result rendering remains separate: it still advertises the optional
-component catalog and honors a host-selected surface, with the registry default
-as its standalone fallback. Text-only fallbacks remain unchanged. Its result
-contract identity is `io.casys.mcp-build123d.geometry-result/1.0`. That
-App-owned name maps to the existing, unchanged top-level
-`GeometryStructuredContent.schemaVersion: "1.0"` union, discriminated by
-`kind: "execution" | "export"`; `build123d-export-artifact/1.0` identifies only
-each nested immutable artifact, not either complete result envelope. The MCP
-Apps handshake announces the exact manifest App id
-`io.casys.mcp-build123d.results` and the package version.
-
-The structured result contract is versioned and never carries the submitted
-script or file contents:
-
-```json
-{
-  "schemaVersion": "1.0",
-  "kind": "execution",
-  "metrics": { "volume_mm3": 11717.2567, "area_mm2": 5875.3982 },
-  "files": []
-}
-```
-
-`kind: "export"` uses the same metrics and returns one immutable artifact
-reference per requested format:
-
-```json
-{
-  "format": "gltf",
-  "artifact": {
-    "schemaVersion": "build123d-export-artifact/1.0",
-    "uri": "casys://build123d/artifacts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.glb",
-    "format": "gltf",
-    "mimeType": "model/gltf-binary",
-    "bytes": 204800,
-    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  }
-}
-```
-
-Read exactly the returned `artifact.uri` with MCP `resources/read`. The server
-does not accept a path parameter, and rehashes its issued in-memory byte copy
-before returning it. The bundled viewer follows the same resource path, checks
-the GLB header and digest, then provides orbit, pan, zoom, fit, reset, and
-wireframe inspection.
-
-### Compose components
-
-The same standalone viewer advertises a catalog of independently mountable
-components during `ui/initialize`. An MCP Compose dashboard chooses a
-declarative surface (component subset, order, grid and gap); without a requested
-surface, standalone mode mounts the default surface: one bounded geometry
-datasheet. A recorded viewer session always mounts that same datasheet.
-
-Every component is a Preact component built from the optional
-`@casys/mcp-view-components` presentation runtime and primitives
-(`SemanticElement` with its ident, section and provenance slots, `MetricGrid`,
-`KeyValueList`, `ArtifactRow`, `Slot3D`, `Card`, `Badge`, `Button`, `Toolbar`
-and system states). The lifecycle/router remains in renderer-neutral
-`@casys/mcp-view`; the local stylesheet owns only the Three.js viewport and
-CAD-specific responsive layout. Numbers follow the host `locale` from
-`ui/initialize`, never the viewing machine's setting.
-
-| Component key                  | Real data and behaviour                                                                                            |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `build123d.geometry-datasheet` | default surface: literal status, at most four readings, the verified 3D model, titled facts, artifacts, provenance |
-| `build123d.geometry-status`    | one-row identity: computation/export or session status with its provenance fingerprint                             |
-| `build123d.geometry-metrics`   | OCCT readings plus topology, bounding box, center of mass and optional density                                     |
-| `build123d.geometry-canvas`    | verified GLB resource plus interactive Three.js scene and cleanup                                                  |
-| `build123d.export-artifacts`   | immutable resource URIs, digests, MIME types and byte sizes; session basis and capture provenance                  |
-
-Repeating a canvas component is supported: controls and Three.js cleanup are
-scoped to each surface instance. A resource URI identifies exact bytes; it does
-not establish stable feature, face, instance, motion, fit, or requirement
-semantics.
-
-No component-level semantic Compose event is emitted or accepted yet. Geometry
-selection would be meaningful only once the result contract exposes stable shape
-or face identifiers; emitting a generic click today would invent semantics. The
-resource-level `viewer.session.apply` action described above is the deliberate
-exception: it replaces the whole App read model and is not a component
-interaction event.
-
-The resource metadata lets a host decide whether to fetch a large delivery
-artifact. The bundled GLB viewer has a 24 MiB local safety cap; resource
-identity and retrieval remain available separately for larger artifacts. The
-server does not invent an assembly manifest: a compound export is one aggregate
-shape unless a future, independently evidenced instance contract is introduced.
-
-### Build the viewer
-
-The committed viewer bundle is a standalone HTML resource. Its source uses the
-split lifecycle and presentation packages `@casys/mcp-view@0.9.3` and
-`@casys/mcp-view-components@0.7.0`, built from the `Casys-AI/mcp-server`
-worktree at commit `59eeb3750d2049b8141b09d3a6f29f66f9d3c657`. The build fails
-closed unless both audited module entries are supplied explicitly; it never
-silently mixes those identities:
-
-```bash
-MCP_VIEW_MODULE=file:///absolute/path/to/mcp-server/packages/view/mod.ts \
-MCP_VIEW_COMPONENTS_MODULE=file:///absolute/path/to/mcp-server/packages/view-components/mod.ts \
-  deno task build:ui
-```
-
-The build retains Deno's dependency-age quarantine for the rest of the graph and
-exempts only the exact Casys-owned view packages. Local component Preact and
-core contracts entries are derived from those two worktree paths, with explicit
-override environment variables available when their layout differs. The
-generated HTML contains no module path or runtime network dependency. The viewer
-accepts only the structured result envelopes documented above; it never runs a
-script and can read only the exact GLB resource URI explicitly returned by
-`build123d_export`. `src/ui/dist/` is generated bundle output and is
-intentionally excluded from Deno source formatting; the viewer source remains
-covered by the normal format check.
-
-`deno task capture:docs` renders the committed bundle through a local
-documentation host (`scripts/capture-viewer-doc.ts`) with the real export
-fixture `docs/fixtures/bracket-r1.export.json` and its digest-checked GLB, in
-headless Chrome with software WebGL, and writes
-`docs/assets/build123d-export-viewer.png`. Set `CHROME_BIN` (and optionally
-`FFMPEG_BIN`) when the documented local executables are elsewhere.
+See the [MCP App documentation](docs/mcp-app.md) for session contracts, resource
+transport, component composition, local builds, and screenshot capture.
 
 ### Script and geometry contract
 

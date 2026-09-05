@@ -35,6 +35,8 @@
       "src/api/harness.py",
       "src/api/assembly-integrity-harness.py",
       "requirements/**/*.txt",
+      "docs/**/*.md",
+      "docs/assets/**/*.png",
       "README.md",
       "CHANGELOG.md",
       "CITATION.cff",

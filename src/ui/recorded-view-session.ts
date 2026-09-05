@@ -744,7 +744,9 @@ function parseProjection(
 function isBrowserSafeAssetUri(value: unknown): value is string {
   if (
     typeof value !== "string" ||
-    !/^\/(?:[A-Za-z0-9._~-]+\/)*[A-Za-z0-9._~-]+\.glb$/.test(value)
+    !/^\/(?:[A-Za-z0-9._~-]+\/)*(?:[A-Za-z0-9._~-]+\.glb|[a-f0-9]{64})$/.test(
+      value,
+    )
   ) return false;
   return value.slice(1).split("/").every((segment) =>
     segment !== "." && segment !== ".."

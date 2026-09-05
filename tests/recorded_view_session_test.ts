@@ -209,6 +209,43 @@ async function loadRecordedGlbBytes(bytes: Uint8Array) {
 const unusedResourceReader: Build123dRecordedResourceReader = () =>
   Promise.resolve({ ok: false, error: "not used" });
 
+Deno.test("recorded GLB loader accepts content-addressed host URIs without an extension", async () => {
+  const bytes = minimalGlb();
+  const fingerprint: `sha256:${string}` = `sha256:${await sha256Hex(bytes)}`;
+  const path = `/api/thread/viewer-apps/resources/${fingerprint.slice(7)}`;
+  for (
+    const [uri, expected] of [
+      [path, true],
+      [`${path}.glb`, true],
+      [`https://thread.invalid${path}`, false],
+      [`//thread.invalid${path}`, false],
+      [`${path}?download=1`, false],
+      [`${path}#model`, false],
+      [`${path}/`, false],
+      [path.replace("/resources/", "/../resources/"), false],
+      [path.replace("/resources/", "/%2e%2e/resources/"), false],
+    ] as const
+  ) {
+    const loaded = await loadBuild123dRecordedGltf(
+      availableProjection(fingerprint),
+      () =>
+        Promise.resolve({
+          ok: true as const,
+          resource: {
+            uri,
+            mimeType: "model/gltf-binary",
+            bytes: bytes.byteLength,
+            fingerprint,
+            encoding: "base64",
+            data: canonicalBase64(bytes),
+          },
+        }),
+    );
+    assertEquals(loaded.ok, expected, uri);
+    if (loaded.ok) assertEquals(loaded.value.uri, uri);
+  }
+});
+
 Deno.test("recorded geometry keeps canonical capture and projected GLB identities separate", () => {
   assertEquals(
     BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
