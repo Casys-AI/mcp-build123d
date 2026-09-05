@@ -141,8 +141,8 @@ motion, fit, or requirement semantics.
 ## Build the viewer
 
 The committed bundle uses `@casys/mcp-view@0.9.3` and
-`@casys/mcp-view-components@0.7.0`, built from `Casys-AI/mcp-server` commit
-`59eeb3750d2049b8141b09d3a6f29f66f9d3c657`. Use that checkout for both module
+`@casys/mcp-view-components@0.7.1`, built from `Casys-AI/mcp-server` commit
+`342c1b7456c011d3f21cad988f9dde23bcbecae0`. Use that checkout for both module
 entries:
 
 ```bash
@@ -156,6 +156,11 @@ entries are derived from those paths; `MCP_VIEW_COMPONENTS_PREACT_MODULE` and
 `MCP_VIEW_CONTRACTS_MODULE` can override those derived entries when the layout
 differs. Deno's dependency-age quarantine applies to the rest of the graph, with
 exceptions for the Casys view packages.
+
+The viewer build uses exact npm dependency pins and its committed
+`src/ui/results-viewer/deno.lock` in frozen mode. The publication workflow
+rebuilds against the same audited kit commit and rejects drift in
+`src/ui/dist/`.
 
 The generated HTML bundles its dependencies. At runtime it accepts the result
 and session contracts above. Direct export GLBs arrive through MCP

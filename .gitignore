@@ -1,4 +1,5 @@
 node_modules/
+.deps/
 
 # Credentials — never commit credentials
 .env

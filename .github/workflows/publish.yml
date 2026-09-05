@@ -13,9 +13,26 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Check out audited MCP View kit
+        uses: actions/checkout@v5
+        with:
+          repository: Casys-AI/mcp-server
+          ref: 342c1b7456c011d3f21cad988f9dde23bcbecae0
+          path: .deps/mcp-server
+          persist-credentials: false
+
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.9.6
+
+      - name: Rebuild and verify committed MCP App
+        env:
+          MCP_VIEW_MODULE: file://${{ github.workspace }}/.deps/mcp-server/packages/view/mod.ts
+          MCP_VIEW_CONTRACTS_MODULE: file://${{ github.workspace }}/.deps/mcp-server/packages/view-contracts/mod.ts
+          MCP_VIEW_COMPONENTS_MODULE: file://${{ github.workspace }}/.deps/mcp-server/packages/view-components/mod.ts
+        run: |
+          deno task build:ui
+          git diff --exit-code -- src/ui/dist
 
       - uses: actions/setup-python@v5
         with:

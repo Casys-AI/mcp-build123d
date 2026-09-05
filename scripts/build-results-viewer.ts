@@ -25,6 +25,7 @@ const temporaryConfigDir = await Deno.makeTempDir({
   prefix: "mcp-build123d-view-",
 });
 const importMap = join(temporaryConfigDir, "import-map.json");
+const viewerLock = join(viewer, "deno.lock");
 const builds = [
   { entry: "main.ts", viewer: "results-viewer" },
 ] as const;
@@ -54,15 +55,15 @@ try {
         "@casys/mcp-view-components/preact": mcpViewComponentsPreactModule,
         "@casys/mcp-view-contracts": mcpViewContractsModule,
         "@modelcontextprotocol/ext-apps":
-          "npm:@modelcontextprotocol/ext-apps@^1.7.4",
-        "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
+          "npm:@modelcontextprotocol/ext-apps@1.7.5",
+        "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@1.30.0",
         "@modelcontextprotocol/sdk/types.js":
-          "npm:@modelcontextprotocol/sdk@^1.29.0/types.js",
+          "npm:@modelcontextprotocol/sdk@1.30.0/types.js",
         // Keep the application JSX/hooks on the same compatible Preact
         // instance resolved by @casys/mcp-view. Two exact versions can leave
         // precompiled VNodes invisible to the renderer without throwing.
-        "preact": "npm:preact@^10.28.3",
-        "preact/hooks": "npm:preact@^10.28.3/hooks",
+        "preact": "npm:preact@10.29.7",
+        "preact/hooks": "npm:preact@10.29.7/hooks",
         "three": "npm:three@0.172.0",
         "three/": "npm:/three@0.172.0/",
       },
@@ -76,6 +77,9 @@ try {
         "bundle",
         "--config",
         importMap,
+        "--lock",
+        viewerLock,
+        "--frozen",
         "--check",
         "--platform=browser",
         "--minify",
