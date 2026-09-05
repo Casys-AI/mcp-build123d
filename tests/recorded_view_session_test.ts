@@ -683,7 +683,7 @@ Deno.test("Build123d declares a whole-view session resource without mandatory co
     app: {
       id: "io.casys.mcp-build123d.results",
       title: "Build123d geometry",
-      version: "0.6.1",
+      version: "0.6.2",
     },
     resources: [{
       uri: "ui://mcp-build123d/results-viewer",
@@ -983,6 +983,7 @@ Deno.test("direct viewer mounts the kit surface App with data-owned surface sele
   assertStringIncludes(main, "startPreactSurfaceApp(");
   assertStringIncludes(main, "surfaceFor: geometrySurfaceOverride");
   assertStringIncludes(main, "fromToolResult: geometryStateFromToolResult");
+  assertStringIncludes(main, "documentLanguage: geometryMessages.locale");
   assertStringIncludes(main, "strict: true");
   assertStringIncludes(main, "info: BUILD123D_MCP_APP_INFO");
   assertStringIncludes(main, "registry: BUILD123D_COMPONENT_REGISTRY");

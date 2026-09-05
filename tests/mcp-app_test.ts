@@ -318,7 +318,7 @@ Deno.test("HTTP discover and tools/list expose instructions, annotations and sta
     assertEquals(discover.status, 200);
     assertEquals(
       (discover.body.result as { serverInfo: unknown }).serverInfo,
-      { name: "mcp-build123d", version: "0.6.1" },
+      { name: "mcp-build123d", version: "0.6.2" },
     );
     assertStringIncludes(
       (discover.body.result as { instructions: string }).instructions,
@@ -673,7 +673,7 @@ Deno.test("the result viewer is the only registered viewer and loads from its pu
   try {
     const assembly = createCadMcpApp({
       viewerModuleUrl:
-        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.6.1/server.ts`,
+        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.6.2/server.ts`,
     });
     assertEquals(assembly.viewers, {
       registered: ["results-viewer"],
@@ -684,7 +684,7 @@ Deno.test("the result viewer is the only registered viewer and loads from its pu
       "published CAD result",
     );
     assertEquals(seen, [
-      "/@casys/mcp-build123d/0.6.1/src/ui/dist/results-viewer/index.html",
+      "/@casys/mcp-build123d/0.6.2/src/ui/dist/results-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();

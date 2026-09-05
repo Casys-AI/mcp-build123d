@@ -616,7 +616,7 @@
           "npm:jose@6"
         ]
       },
-      "jsr:@casys/mcp-view-components@0.8.0": {
+      "jsr:@casys/mcp-view-components@0.9.0": {
         "dependencies": [
           "jsr:@deno/dnt@0.41",
           "jsr:@std/assert@1",

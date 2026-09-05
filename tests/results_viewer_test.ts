@@ -320,28 +320,62 @@ Deno.test("results viewer formats numbers for the host locale, never the machine
   assertEquals(formatBytes(3 * 1024 * 1024, "en-US"), "3.0 MB");
 });
 
+function resolveLabel(
+  value: string | ((locale?: string) => string),
+  locale?: string,
+): string {
+  return typeof value === "function" ? value(locale) : value;
+}
+
+function projectedError(
+  state: ReturnType<typeof geometryStateFromToolResult>,
+  locale?: string,
+) {
+  assertEquals(state.kind, "error");
+  if (state.kind !== "error") {
+    throw new Error("expected an error display state");
+  }
+  return {
+    kind: "error" as const,
+    code: state.code,
+    title: resolveLabel(state.title, locale),
+    message: resolveLabel(state.message, locale),
+    titleKind: typeof state.title,
+    messageKind: typeof state.message,
+  };
+}
+
 Deno.test("a tool error projects the MCP text block as a computation failure", () => {
-  assertEquals(
-    geometryStateFromToolResult({
-      isError: true,
-      content: [{ type: "text", text: "boom" }],
-    }),
-    {
-      kind: "error",
-      code: TOOL_ERROR_CODE,
-      message: "boom",
-      title: "Computation failed",
-    },
-  );
+  const state = geometryStateFromToolResult({
+    isError: true,
+    content: [{ type: "text", text: "boom" }],
+  });
+  assertEquals(projectedError(state), {
+    kind: "error",
+    code: TOOL_ERROR_CODE,
+    message: "boom",
+    title: "Computation failed",
+    titleKind: "function",
+    messageKind: "string",
+  });
+  assertEquals(projectedError(state, "fr").title, "Échec du calcul");
+  assertEquals(projectedError(state, "fr").message, "boom");
 });
 
 Deno.test("a tool error without a text block uses the default computation-failed message", () => {
-  assertEquals(geometryStateFromToolResult({ isError: true }), {
+  const state = geometryStateFromToolResult({ isError: true });
+  assertEquals(projectedError(state), {
     kind: "error",
     code: TOOL_ERROR_CODE,
     message: "The build123d computation returned an error.",
     title: "Computation failed",
+    titleKind: "function",
+    messageKind: "function",
   });
+  assertEquals(
+    projectedError(state, "fr").message,
+    "Le calcul build123d a retourné une erreur.",
+  );
 });
 
 Deno.test("an invalid tool envelope is rejected as not displayable", () => {
@@ -359,12 +393,17 @@ Deno.test("an invalid tool envelope is rejected as not displayable", () => {
   const parsed = parseGeometryResult(envelope);
   assertEquals(parsed.ok, false);
   if (parsed.ok) return;
-  assertEquals(geometryStateFromToolResult({ structuredContent: envelope }), {
+  const state = geometryStateFromToolResult({ structuredContent: envelope });
+  assertEquals(projectedError(state), {
     kind: "error",
     code: RESULT_REJECTED_CODE,
     title: "Result not displayable",
     message: parsed.error,
+    titleKind: "function",
+    messageKind: "string",
   });
+  assertEquals(projectedError(state, "fr").title, "Résultat non affichable");
+  assertEquals(projectedError(state, "fr").message, parsed.error);
 });
 
 Deno.test("a valid tool envelope projects as a geometry result", () => {
@@ -389,15 +428,20 @@ Deno.test("an invalid viewer session is rejected", () => {
   const parsed = parseBuild123dViewerSession({ kind: "not-a-session" });
   assertEquals(parsed.ok, false);
   if (parsed.ok) return;
-  assertEquals(
-    geometryStateFromViewerSession({ kind: "not-a-session" }, reader),
-    {
-      kind: "error",
-      code: SESSION_REJECTED_CODE,
-      title: "Session rejected",
-      message: parsed.error,
-    },
+  const state = geometryStateFromViewerSession(
+    { kind: "not-a-session" },
+    reader,
   );
+  assertEquals(projectedError(state), {
+    kind: "error",
+    code: SESSION_REJECTED_CODE,
+    title: "Session rejected",
+    message: parsed.error,
+    titleKind: "function",
+    messageKind: "string",
+  });
+  assertEquals(projectedError(state, "fr").title, "Session rejetée");
+  assertEquals(projectedError(state, "fr").message, parsed.error);
 });
 
 Deno.test("a valid viewer session projects with the given resource reader", () => {
@@ -516,16 +560,18 @@ Deno.test("French interface labels preserve measurements, contract states and ra
     unit: "kg",
   });
   const diagnostic = "source.unresolved <unaltered>";
-  assertEquals(
-    geometryStateFromToolResult({
-      isError: true,
-      content: [{ type: "text", text: diagnostic }],
-    }, { locale: "fr" }),
-    {
-      kind: "error",
-      title: "Échec du calcul",
-      code: TOOL_ERROR_CODE,
-      message: diagnostic,
-    },
-  );
+  const state = geometryStateFromToolResult({
+    isError: true,
+    content: [{ type: "text", text: diagnostic }],
+  }, { locale: "fr" });
+  assertEquals(projectedError(state, "fr"), {
+    kind: "error",
+    title: "Échec du calcul",
+    code: TOOL_ERROR_CODE,
+    message: diagnostic,
+    titleKind: "function",
+    messageKind: "string",
+  });
+  assertEquals(projectedError(state).title, "Computation failed");
+  assertEquals(projectedError(state).message, diagnostic);
 });

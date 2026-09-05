@@ -4,6 +4,8 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-09-05
+
 - **Geometry datasheet.** The results viewer default surface is now one bounded
   `build123d.geometry-datasheet`: a literal status marker (`exported`,
   `computed`, `recorded`, `provisional`, `documentary`, or the projection
@@ -16,9 +18,15 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
   `ui/initialize`. Interface labels use the shared translation helper with
   English and French dictionaries; missing locales fall back to English.
   Recorded states, identifiers, units, and diagnostic messages remain literal.
+  The App sets `document.documentElement.lang` from `geometryMessages.locale`.
+  Generic error headings (`Computation failed`, `Result not displayable`,
+  `Session rejected`, and the fallback computation message) are lazy labels
+  resolved on each visible status render, so they follow a later host locale
+  without re-running projection. Literal diagnostics and `code` stay strings.
 - **Host theme.** Scene background, fog, grid and overlays derive their palette
   from MCP View tokens. A theme-only update retains the canvas, camera,
-  wireframe state and verified GLB without another resource read.
+  wireframe state and verified GLB without another resource read. Nested equal
+  host snapshots no longer remount that scene.
 - **Kit lifecycle.** The viewer is mounted by `startPreactSurfaceApp` from
   `@casys/mcp-view-components/preact` instead of a hand-rolled App: the kit owns
   the loading/surface routes, the serialized navigations, the host-context
@@ -32,7 +40,7 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
   its loading status until the first result rather than showing an empty state
   after the handshake.
 - **Kit pin.** The bundle is rebuilt against `@casys/mcp-view@0.9.3` and
-  `@casys/mcp-view-components@0.8.0` (`Casys-AI/mcp-server@f9cb849`), with an
+  `@casys/mcp-view-components@0.9.0` (`Casys-AI/mcp-server@b08802d`), with an
   audited CI source pin and frozen viewer dependency lock.
 - **Reproducible documentation capture.** `deno task capture:docs` renders the
   committed bundle with the real `build123d_export` fixture

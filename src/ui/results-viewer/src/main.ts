@@ -49,6 +49,7 @@ void startPreactSurfaceApp({
   surfaceClassName: "build123d-component-surface",
   statusClassName: BUILD123D_STATUS_CLASS,
   loadingLabel: (locale) => geometryMessages(locale)("receiving"),
+  documentLanguage: geometryMessages.locale,
   fromToolResult: geometryStateFromToolResult,
   viewerSession: {
     // Every `viewer.session.apply` payload addresses this whole-view App; the

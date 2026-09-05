@@ -3,7 +3,7 @@
   "app": {
     "id": "io.casys.mcp-build123d.results",
     "title": "Build123d geometry",
-    "version": "0.6.1"
+    "version": "0.6.2"
   },
   "resources": [
     {

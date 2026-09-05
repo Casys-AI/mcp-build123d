@@ -31,32 +31,32 @@ export interface GeometryToolResult {
 export type GeometryDisplayState =
   | {
     readonly kind: "error";
-    readonly title: string;
+    readonly title: string | ((locale?: string) => string);
     readonly code: string;
-    readonly message: string;
+    readonly message: string | ((locale?: string) => string);
   }
   | { readonly kind: "result"; readonly result: GeometryComponentData };
 
 /** A tool error is shown with its own text; a malformed envelope with the parser's. */
 export function geometryStateFromToolResult(
   result: GeometryToolResult,
-  host?: { readonly locale?: string },
+  _host?: { readonly locale?: string },
 ): GeometryDisplayState {
-  const t = geometryMessages(host?.locale);
   if (result.isError) {
+    const diagnostic = mcpErrorText(result.content);
     return {
       kind: "error",
-      title: t("computationFailed"),
+      title: (locale) => geometryMessages(locale)("computationFailed"),
       code: TOOL_ERROR_CODE,
-      message: mcpErrorText(result.content) ??
-        t("computationError"),
+      message: diagnostic ??
+        ((locale) => geometryMessages(locale)("computationError")),
     };
   }
   const parsed = parseGeometryResult(result.structuredContent);
   if (!parsed.ok) {
     return {
       kind: "error",
-      title: t("resultRejected"),
+      title: (locale) => geometryMessages(locale)("resultRejected"),
       code: RESULT_REJECTED_CODE,
       message: parsed.error,
     };
@@ -71,13 +71,13 @@ export function geometryStateFromToolResult(
 export function geometryStateFromViewerSession(
   value: unknown,
   readResource: Build123dRecordedResourceReader,
-  locale?: string,
+  _locale?: string,
 ): GeometryDisplayState {
   const parsed = parseBuild123dViewerSession(value);
   if (!parsed.ok) {
     return {
       kind: "error",
-      title: geometryMessages(locale)("sessionRejected"),
+      title: (locale) => geometryMessages(locale)("sessionRejected"),
       code: SESSION_REJECTED_CODE,
       message: parsed.error,
     };

@@ -21,7 +21,7 @@ METHOD = {
     "linearToleranceMm": 0.000001,
 }
 PRODUCER_SERVICE = "mcp-build123d"
-PRODUCER_PACKAGE_VERSION = "0.6.1"
+PRODUCER_PACKAGE_VERSION = "0.6.2"
 PRODUCER_TOOL = "build123d_observe_assembly_integrity"
 CADQUERY_OCP_VERSION = "7.9.3.1"
 MAXIMUM_OCCURRENCES = 32

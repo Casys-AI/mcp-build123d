@@ -152,8 +152,8 @@ motion, fit, or requirement semantics.
 ## Build the viewer
 
 The committed bundle uses `@casys/mcp-view@0.9.3` and
-`@casys/mcp-view-components@0.8.0`, built from `Casys-AI/mcp-server` commit
-`f9cb8493edfd555c58b9fc6f5601fe444fc78046`. Use that checkout for both module
+`@casys/mcp-view-components@0.9.0`, built from `Casys-AI/mcp-server` commit
+`b08802df353bb25d25a1c8d64b22ea61b5287ae0`. Use that checkout for both module
 entries:
 
 ```bash
