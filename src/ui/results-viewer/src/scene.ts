@@ -52,7 +52,7 @@ export async function mountCadScene(
   viewport.replaceChildren(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x100e0c);
+  scene.background = new THREE.Color();
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 100000);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -100,20 +100,43 @@ export async function mountCadScene(
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
   const radius = Math.max(size.length() * 0.5, 0.001);
-  scene.fog = new THREE.FogExp2(0x100e0c, 0.12 / radius);
+  const fog = new THREE.FogExp2(0xffffff, 0.12 / radius);
+  scene.fog = fog;
 
   const gridSize = Math.max(Math.ceil(Math.max(size.x, size.z) * 1.8), 10);
   const gridDivisions = Math.min(Math.max(Math.round(gridSize / 10), 10), 80);
   const grid = new THREE.GridHelper(
     gridSize,
     gridDivisions,
-    0xe49a53,
-    0x3b3129,
+    0xffffff,
+    0xffffff,
   );
   grid.position.y = bounds.min.y;
   (grid.material as THREE.Material).opacity = 0.42;
   (grid.material as THREE.Material).transparent = true;
   scene.add(grid);
+
+  // A host theme update changes palette only: the verified model, controls and
+  // camera stay mounted. Computed CSS resolves the aliases to the shared kit's
+  // tokens before they reach WebGL; the overlay uses the same palette.
+  const applyTheme = (): void => {
+    const style = getComputedStyle(viewport);
+    const background = style.getPropertyValue("--cad-scene-background").trim();
+    const gridColor = style.getPropertyValue("--cad-grid").trim();
+    if (background) (scene.background as THREE.Color).set(background);
+    fog.color.copy(scene.background as THREE.Color);
+    if (gridColor) {
+      (grid.material as THREE.LineBasicMaterial).color.set(gridColor);
+    }
+  };
+  applyTheme();
+  const themeObserver = new MutationObserver(applyTheme);
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme", "class", "style"],
+  });
+  const preferredTheme = matchMedia("(prefers-color-scheme: dark)");
+  preferredTheme.addEventListener("change", applyTheme);
 
   camera.near = Math.max(radius / 1000, 0.001);
   camera.far = Math.max(radius * 100, 1000);
@@ -196,6 +219,8 @@ export async function mountCadScene(
       disposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
+      themeObserver.disconnect();
+      preferredTheme.removeEventListener("change", applyTheme);
       controls.dispose();
       model.traverse((object: THREE.Object3D) => {
         const mesh = object as THREE.Mesh;

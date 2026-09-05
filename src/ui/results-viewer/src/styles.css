@@ -2,6 +2,8 @@
   --cad-line: var(--mcp-view-border);
   --cad-accent: var(--mcp-view-accent);
   --cad-mono: var(--font-mono, "SFMono-Regular", Consolas, monospace);
+  --cad-scene-background: var(--mcp-view-subtle);
+  --cad-grid: var(--mcp-view-border-strong);
 }
 
 html,
@@ -22,6 +24,14 @@ body {
   min-width: 0;
 }
 
+.geometry-readings {
+  margin-top: var(--mcp-view-gap);
+}
+
+.geometry-datasheet .mcp-view-element-detail {
+  overflow-wrap: anywhere;
+}
+
 .geometry-scene-controls {
   justify-content: flex-end;
   margin-bottom: 0.45rem;
@@ -35,11 +45,11 @@ body {
 .cad-stage {
   position: relative;
   width: 100%;
-  height: clamp(220px, 52vh, 440px);
+  height: clamp(260px, 58vh, 520px);
   isolation: isolate;
   overflow: hidden;
   border-radius: var(--mcp-view-radius);
-  background: #100e0c;
+  background: var(--cad-scene-background);
 }
 
 .cad-viewport {
@@ -78,11 +88,10 @@ body {
   justify-items: end;
   gap: 0.3rem;
   pointer-events: none;
-  color: #c5b7aa;
+  color: var(--mcp-view-text-secondary);
   font: 700 0.65rem/1.25 var(--cad-mono);
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  text-shadow: 0 1px 2px #000;
 }
 
 .cad-state-overlay {
@@ -92,7 +101,7 @@ body {
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(16, 14, 12, 0.88);
+  background: var(--cad-scene-background);
 }
 
 .cad-state-overlay .mcp-view-state {

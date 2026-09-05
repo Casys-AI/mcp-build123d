@@ -1,4 +1,5 @@
 import type { GeometryResult } from "./contract.ts";
+import { geometryMessages } from "./locale.ts";
 import type {
   Build123dRecordedGeometryProjection,
   Build123dRecordedResourceReader,
@@ -141,17 +142,18 @@ export function geometryIdentity(
   data: GeometryComponentData,
   locale?: string,
 ): GeometryIdentity {
+  const t = geometryMessages(locale);
   if (isViewerSessionGeometryData(data)) {
     const { session } = data;
     const projection = session.projection;
     if (isGeometryReviewSession(session)) {
       return {
         marker: session.status,
-        label: "Geometry review",
+        label: t("geometryReview"),
         detail:
-          `${session.basis.projectId} r${session.basis.projectRevision} · ${session.basis.subjectId} · review r${session.anchor.revision}${
-            projectionSuffix(projection)
-          }`,
+          `${session.basis.projectId} · r${session.basis.projectRevision} · ${
+            t("reviewRevision", { revision: session.anchor.revision })
+          }${projectionSuffix(projection)}`,
         tone: session.status === "provisional" ? "warning" : "neutral",
       };
     }
@@ -159,11 +161,11 @@ export function geometryIdentity(
       marker: projection.status === "available"
         ? "recorded"
         : projection.status,
-      label: "Recorded geometry projection",
+      label: t("recordedGeometry"),
       detail:
-        `${session.basis.projectId} r${session.basis.projectRevision} · ${session.basis.thread.id} r${session.basis.thread.revision} · ${session.anchor.kind}:${session.anchor.id}${
-          projectionSuffix(projection)
-        }`,
+        `${session.basis.projectId} · r${session.basis.projectRevision} · ${
+          t("threadRevision", { revision: session.basis.thread.revision })
+        }${projectionSuffix(projection)}`,
       tone: projection.status === "available"
         ? "info"
         : projection.status === "unresolved"
@@ -174,7 +176,9 @@ export function geometryIdentity(
   const { result } = data;
   return {
     marker: result.kind === "export" ? "exported" : "computed",
-    label: result.kind === "export" ? "Exported geometry" : "Computed geometry",
+    label: t(
+      result.kind === "export" ? "exportedGeometry" : "computedGeometry",
+    ),
     detail: `build123d · ${topologyLine(result, locale)}`,
     tone: "success",
   };
@@ -214,21 +218,23 @@ export function geometryReference(
 /** One provenance line per datasheet; undefined when the result sealed no bytes. */
 export function geometryProvenance(
   data: GeometryComponentData,
+  locale?: string,
 ): GeometryProvenance | undefined {
+  const t = geometryMessages(locale);
   if (isViewerSessionGeometryData(data)) {
     const { session } = data;
     if (isGeometryReviewSession(session)) {
-      return { label: "Review anchor", value: session.anchor.fingerprint };
+      return { label: t("reviewAnchor"), value: session.anchor.fingerprint };
     }
     return {
-      label: "Canonical capture",
+      label: t("canonicalCapture"),
       value: session.provenance.canonicalCapture.artifactFingerprint,
     };
   }
   const primary = data.result.files[0]?.artifact;
   return primary
     ? {
-      label: `${primary.format.toUpperCase()} artifact`,
+      label: `${primary.format.toUpperCase()} · ${t("artifact")}`,
       value: `sha256:${primary.sha256}`,
     }
     : undefined;
@@ -240,17 +246,18 @@ export function geometryReadings(
   locale?: string,
 ): readonly GeometryReading[] {
   if (isViewerSessionGeometryData(data)) return [];
+  const t = geometryMessages(locale);
   const metrics = data.result.metrics;
   const readings: GeometryReading[] = [
     {
       id: "volume",
-      label: "Volume",
+      label: t("volume"),
       value: formatNumber(metrics.volumeMm3, locale),
       unit: "mm³",
     },
     {
       id: "surface-area",
-      label: "Surface",
+      label: t("surface"),
       value: formatNumber(metrics.areaMm2, locale),
       unit: "mm²",
     },
@@ -258,7 +265,7 @@ export function geometryReadings(
   if (metrics.massKg !== undefined) {
     readings.push({
       id: "mass",
-      label: "Mass",
+      label: t("mass"),
       value: formatNumber(metrics.massKg, locale),
       unit: "kg",
     });
@@ -266,7 +273,7 @@ export function geometryReadings(
   if (metrics.boundingBoxMm) {
     readings.push({
       id: "bounding-envelope",
-      label: "Envelope",
+      label: t("envelope"),
       value: formatVector(metrics.boundingBoxMm.size, locale, " × "),
       unit: "mm",
     });
@@ -279,18 +286,23 @@ export function geometryFactSections(
   data: GeometryComponentData,
   locale?: string,
 ): readonly GeometryFactSection[] {
+  const t = geometryMessages(locale);
   if (isViewerSessionGeometryData(data)) {
-    return sessionFactSections(data.session);
+    return sessionFactSections(data.session, locale);
   }
   const { result } = data;
   const metrics = result.metrics;
   const geometry: GeometryFact[] = [
-    { id: "topology", label: "Topology", value: topologyLine(result, locale) },
+    {
+      id: "topology",
+      label: t("topology"),
+      value: topologyLine(result, locale),
+    },
   ];
   if (metrics.boundingBoxMm) {
     geometry.push({
       id: "bounding-box",
-      label: "Bounding box",
+      label: t("boundingBox"),
       value: `[${formatVector(metrics.boundingBoxMm.min, locale)}] → [${
         formatVector(metrics.boundingBoxMm.max, locale)
       }] mm`,
@@ -299,69 +311,71 @@ export function geometryFactSections(
   if (metrics.centerOfMassMm) {
     geometry.push({
       id: "center-of-mass",
-      label: "Center of mass",
+      label: t("centerOfMass"),
       value: `[${formatVector(metrics.centerOfMassMm, locale)}] mm`,
     });
   }
   if (metrics.densityKgM3 !== undefined) {
     geometry.push({
       id: "density",
-      label: "Density",
+      label: t("density"),
       value: `${formatNumber(metrics.densityKgM3, locale)} kg/m³`,
     });
   }
-  return [{ id: "geometry", title: "Geometry", items: geometry }];
+  return [{ id: "geometry", title: t("geometry"), items: geometry }];
 }
 
 function sessionFactSections(
   session: Build123dViewerSession,
+  locale?: string,
 ): readonly GeometryFactSection[] {
-  const projection = projectionFacts(session.projection);
+  const t = geometryMessages(locale);
+  const projection = projectionFacts(session.projection, locale);
   if (isGeometryReviewSession(session)) {
     const { anchor, basis, provenance, status } = session;
     const draft = provenance.draftCapture;
     return [
       {
         id: "basis",
-        title: "Project basis",
+        title: t("projectBasis"),
         items: [
           {
             id: "project",
-            label: "Project",
+            label: t("project"),
             value: `${basis.projectId} r${basis.projectRevision}`,
           },
-          { id: "subject", label: "Subject", value: basis.subjectId },
+          { id: "subject", label: t("subject"), value: basis.subjectId },
           {
             id: "review",
-            label: "Review",
+            label: t("review"),
             value: `${anchor.id} · r${anchor.revision}`,
           },
-          { id: "status", label: "Status", value: status },
+          { id: "status", label: t("status"), value: status },
         ],
       },
       {
         id: "draft-capture",
-        title: "Draft capture",
+        title: t("draftCapture"),
         items: [
           {
             id: "draft",
-            label: "Artifact",
+            label: t("artifact"),
             value: `${draft.artifactId} · ${draft.artifactVersion}`,
           },
           {
             id: "draft-fingerprint",
-            label: "Fingerprint",
+            label: t("fingerprint"),
             value: draft.artifactFingerprint,
           },
           {
             id: "draft-producer",
-            label: "Producer",
+            label: t("producer"),
             value:
               `${draft.producer.serverId} · ${draft.producer.tool} · ${draft.producer.runId}`,
           },
         ],
       },
-      { id: "projection", title: "GLB projection", items: projection },
+      { id: "projection", title: t("glbProjection"), items: projection },
     ];
   }
   const { anchor, basis, provenance } = session;
@@ -369,73 +383,79 @@ function sessionFactSections(
   return [
     {
       id: "basis",
-      title: "Thread basis",
+      title: t("threadBasis"),
       items: [
         {
           id: "project",
-          label: "Project",
+          label: t("project"),
           value: `${basis.projectId} r${basis.projectRevision}`,
         },
-        { id: "subject", label: "Subject", value: basis.subjectId },
+        { id: "subject", label: t("subject"), value: basis.subjectId },
         {
           id: "thread",
-          label: "Thread",
+          label: t("thread"),
           value: `${basis.thread.id} r${basis.thread.revision}`,
         },
-        { id: "anchor", label: "Anchor", value: `${anchor.kind}:${anchor.id}` },
+        {
+          id: "anchor",
+          label: t("anchor"),
+          value: `${anchor.kind}:${anchor.id}`,
+        },
       ],
     },
     {
       id: "canonical-capture",
-      title: "Canonical capture",
+      title: t("canonicalCapture"),
       items: [
         {
           id: "capture",
-          label: "Artifact",
+          label: t("artifact"),
           value: `${capture.artifactId} · ${capture.artifactVersion}`,
         },
         {
           id: "capture-fingerprint",
-          label: "Fingerprint",
+          label: t("fingerprint"),
           value: capture.artifactFingerprint,
         },
         {
           id: "capture-producer",
-          label: "Producer",
+          label: t("producer"),
           value: `${capture.producer.serverId} · ${capture.producer.tool}`,
         },
-        { id: "capture-run", label: "Run", value: capture.producer.runId },
+        { id: "capture-run", label: t("run"), value: capture.producer.runId },
       ],
     },
-    { id: "projection", title: "GLB projection", items: projection },
+    { id: "projection", title: t("glbProjection"), items: projection },
   ];
 }
 
 function projectionFacts(
   projection: Build123dRecordedGeometryProjection,
+  locale?: string,
 ): readonly GeometryFact[] {
+  const t = geometryMessages(locale);
   if (projection.status !== "available") {
     return [
-      { id: "projection-status", label: "Status", value: projection.status },
-      { id: "projection-reason", label: "Reason", value: projection.reason },
+      { id: "projection-status", label: t("status"), value: projection.status },
+      { id: "projection-reason", label: t("reason"), value: projection.reason },
     ];
   }
   const { artifact } = projection;
   return [
-    { id: "projection-status", label: "Status", value: projection.status },
+    { id: "projection-status", label: t("status"), value: projection.status },
     {
       id: "projection-artifact",
-      label: "Artifact",
+      label: t("artifact"),
       value: `${artifact.artifactId} · ${artifact.artifactVersion}`,
     },
     {
       id: "projection-fingerprint",
-      label: "Fingerprint",
+      label: t("fingerprint"),
       value: artifact.artifactFingerprint,
     },
     {
       id: "projection-producer",
-      label: "Producer",
+      label: t("producer"),
       value:
         `${artifact.producer.serverId} · ${artifact.producer.tool} · ${artifact.producer.runId}`,
     },
@@ -449,16 +469,13 @@ function projectionSuffix(
 }
 
 function topologyLine(result: GeometryResult, locale?: string): string {
+  const t = geometryMessages(locale);
   const { solids, faces, edges } = result.metrics;
-  return `${formatCount(solids, locale)} ${plural(solids, "solid")} · ${
-    formatCount(faces, locale)
-  } ${plural(faces, "face")} · ${formatCount(edges, locale)} ${
-    plural(edges, "edge")
-  }`;
-}
-
-function plural(count: number, noun: string): string {
-  return count === 1 ? noun : `${noun}s`;
+  return `${formatCount(solids, locale)} ${
+    t(solids === 1 ? "solid" : "solids")
+  } · ${formatCount(faces, locale)} ${t(faces === 1 ? "face" : "faces")} · ${
+    formatCount(edges, locale)
+  } ${t(edges === 1 ? "edge" : "edges")}`;
 }
 
 function digest(fingerprint: `sha256:${string}`): string {
@@ -467,13 +484,14 @@ function digest(fingerprint: `sha256:${string}`): string {
 
 /** The host declares the locale; the viewing machine's own setting is not it. */
 export function formatNumber(value: number, locale?: string): string {
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(
-    value,
-  );
+  return new Intl.NumberFormat(locale ?? "en", { maximumFractionDigits: 4 })
+    .format(
+      value,
+    );
 }
 
 export function formatCount(value: number, locale?: string): string {
-  return new Intl.NumberFormat(locale).format(value);
+  return new Intl.NumberFormat(locale ?? "en").format(value);
 }
 
 function formatVector(
@@ -496,7 +514,7 @@ export function formatBytes(value: number, locale?: string): string {
     : value / (1024 * 1024);
   const digits = unit === "B" ? 0 : 1;
   return `${
-    new Intl.NumberFormat(locale, {
+    new Intl.NumberFormat(locale ?? "en", {
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
     }).format(scaled)

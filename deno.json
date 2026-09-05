@@ -51,11 +51,16 @@
   },
   "minimumDependencyAge": {
     "age": "P1D",
-    "exclude": ["jsr:@casys/mcp-view-contracts"]
+    "exclude": [
+      "jsr:@casys/mcp-view-contracts",
+      "jsr:@casys/mcp-view-components",
+      "jsr:@casys/mcp-view"
+    ]
   },
   "imports": {
     "@casys/mcp-server": "jsr:@casys/mcp-server@0.26.1",
     "@casys/mcp-view-contracts": "jsr:@casys/mcp-view-contracts@0.1.0",
+    "@casys/mcp-view-components": "jsr:@casys/mcp-view-components@0.8.0",
     "ajv": "npm:ajv@^8.17.1",
     "hono": "npm:hono@^4",
     "hono/cors": "npm:hono@^4/cors",

@@ -785,9 +785,8 @@ Deno.test("recorded geometry owns a dedicated surface and never invents OCCT met
   assertEquals(geometryReadings(data), []);
   assertEquals(geometryIdentity(data), {
     marker: "recorded",
-    label: "Recorded geometry projection",
-    detail:
-      "project-tps03 r24 · thread-tps03 r19 · part-definition:TabletStand",
+    label: "Recorded geometry",
+    detail: "project-tps03 · r24 · Thread r19",
     tone: "info",
   });
   assertEquals(geometryReference(data), {
@@ -912,7 +911,7 @@ Deno.test("pre-MRTR review surface stays provisional and omits canonical metrics
   assertEquals(geometryIdentity(data), {
     marker: "provisional",
     label: "Geometry review",
-    detail: "project-tps03 r24 · two-piece-tablet-stand · review r24",
+    detail: "project-tps03 · r24 · Review r24",
     tone: "warning",
   });
   // The review anchor, not any capture, is the identity of a pre-MRTR review.
@@ -1014,10 +1013,10 @@ Deno.test("recorded viewer projects sessions through the kit and owns its resour
     main,
     "validate: (_value: unknown): _value is unknown => true",
   );
-  assertStringIncludes(main, "toState: (value) =>");
+  assertStringIncludes(main, "toState: (value, host) =>");
   assertStringIncludes(
     main,
-    "geometryStateFromViewerSession(value, appHostResourceBridge.read)",
+    "appHostResourceBridge.read,",
   );
   assertEquals(
     main.indexOf("createMcpAppHostResourceBridge({") <
@@ -1043,9 +1042,12 @@ Deno.test("recorded viewer projects sessions through the kit and owns its resour
   assertEquals(main.includes("viewerSessionActive"), false);
   assertStringIncludes(components, "loadBuild123dRecordedGltf(");
   assertStringIncludes(components, "context.app.readServerResource");
-  assertStringIncludes(components, "Canonical Thread evidence");
+  const labels = await Deno.readTextFile(
+    new URL("../src/ui/results-viewer/src/locales/en.ts", import.meta.url),
+  );
+  assertStringIncludes(labels, "Canonical Thread evidence");
   assertStringIncludes(
-    components,
+    labels,
     "Interactive recorded GLB projection linked to Digital Thread geometry",
   );
   assertEquals(
@@ -1054,6 +1056,33 @@ Deno.test("recorded viewer projects sessions through the kit and owns its resour
   );
   assertEquals(recordedContract.includes("fetch("), false);
   assertEquals(components.includes("fetch("), false);
+});
+
+Deno.test("recorded geometry localizes labels without changing recorded identities or states", () => {
+  const parsed = parseBuild123dRecordedViewSession(
+    recordedSession(availableProjection()),
+  );
+  if (!parsed.ok) throw new Error(parsed.error);
+  const data = {
+    source: "viewer-session" as const,
+    session: parsed.value,
+    readResource: unusedResourceReader,
+  };
+  const identity = geometryIdentity(data, "fr-TW");
+  assertEquals(identity.label, "Géométrie enregistrée");
+  assertEquals(identity.marker, "recorded");
+  assertEquals(identity.detail, "project-tps03 · r24 · Thread r19");
+  assertEquals(identity.detail.includes(CAPTURE_FINGERPRINT), false);
+  const english = geometryFactSections(data, "en");
+  const french = geometryFactSections(data, "fr");
+  assertEquals(french[0].title, "Base du Thread");
+  const values = (sections: ReturnType<typeof geometryFactSections>) =>
+    sections.map((section) => ({
+      id: section.id,
+      fields: section.items.map(({ id, value }) => ({ id, value })),
+    }));
+  assertEquals(values(french), values(english));
+  assertEquals(geometryIdentity(data, "zh-TW").label, "Recorded geometry");
 });
 
 Deno.test("viewer build fails closed without explicit audited split modules", () => {

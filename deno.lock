@@ -2,7 +2,10 @@
   "version": "5",
   "specifiers": {
     "jsr:@casys/mcp-server@0.26.1": "0.26.1",
+    "jsr:@casys/mcp-view-components@0.8.0": "0.8.0",
+    "jsr:@casys/mcp-view-contracts@0.1": "0.1.0",
     "jsr:@casys/mcp-view-contracts@0.1.0": "0.1.0",
+    "jsr:@casys/mcp-view@~0.9.3": "0.9.3",
     "jsr:@luca/esbuild-deno-loader@0.11": "0.11.1",
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/bytes@^1.0.2": "1.0.6",
@@ -33,6 +36,21 @@
         "npm:ajv",
         "npm:hono",
         "npm:jose"
+      ]
+    },
+    "@casys/mcp-view@0.9.3": {
+      "integrity": "41bc0596b15f9f4d65fef63e8de4da9ad0912d92604bc475b045f96da829e905",
+      "dependencies": [
+        "jsr:@casys/mcp-view-contracts@0.1",
+        "npm:@modelcontextprotocol/ext-apps",
+        "npm:@modelcontextprotocol/sdk"
+      ]
+    },
+    "@casys/mcp-view-components@0.8.0": {
+      "integrity": "ace0e42579ef94daec773d2386645fe7b7d3183158a127e027b8c864d4042ffd",
+      "dependencies": [
+        "jsr:@casys/mcp-view",
+        "jsr:@casys/mcp-view-contracts@0.1"
       ]
     },
     "@casys/mcp-view-contracts@0.1.0": {
@@ -779,6 +797,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@casys/mcp-server@0.26.1",
+      "jsr:@casys/mcp-view-components@0.8.0",
       "jsr:@casys/mcp-view-contracts@0.1.0",
       "jsr:@std/assert@1",
       "jsr:@std/path@1",

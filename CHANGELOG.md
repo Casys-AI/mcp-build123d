@@ -8,20 +8,23 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
   `build123d.geometry-datasheet`: a literal status marker (`exported`,
   `computed`, `recorded`, `provisional`, `documentary`, or the projection
   status), at most four readings (volume, surface, mass, envelope), the verified
-  3D model in a kit `Slot3D`, titled fact sections (geometry; or Thread/Project
-  basis, capture and GLB projection for sessions), one `ArtifactRow` per sealed
-  export and a single provenance line. Recorded and review sessions mount the
-  same datasheet. The four small catalog components remain for Compose hosts and
-  slice the same model.
+  3D model in a kit `Slot3D`, and exact facts and provenance in the
+  closed-by-default details of the shared `FocusedView`. Recorded and review
+  sessions mount the same datasheet. The four small catalog components remain
+  for Compose hosts and slice the same model.
 - **Host locale.** Every number in the viewer follows `hostContext.locale` from
-  `ui/initialize`; the previous hard-coded `en-US` formatting and the mixed
-  French/English labels are gone.
+  `ui/initialize`. Interface labels use the shared translation helper with
+  English and French dictionaries; missing locales fall back to English.
+  Recorded states, identifiers, units, and diagnostic messages remain literal.
+- **Host theme.** Scene background, fog, grid and overlays derive their palette
+  from MCP View tokens. A theme-only update retains the canvas, camera,
+  wireframe state and verified GLB without another resource read.
 - **Kit lifecycle.** The viewer is mounted by `startPreactSurfaceApp` from
   `@casys/mcp-view-components/preact` instead of a hand-rolled App: the kit owns
   the loading/surface routes, the serialized navigations, the host-context
   remounts (which now also cover recorded sessions) and the status rendering.
-  What stays local is kit-free and tested directly: `projection.ts` turns a tool
-  result or a recorded session into a display state with stable error codes
+  The local projection is tested directly: `projection.ts` turns a tool result
+  or a recorded session into a display state with stable error codes
   (`tool-error`, `result-rejected`, `session-rejected`),
   `geometrySurfaceOverride` is passed as `surfaceFor` so a session keeps owning
   its whole-view surface, and `onTeardown` disposes the host resource bridge.
@@ -29,8 +32,8 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
   its loading status until the first result rather than showing an empty state
   after the handshake.
 - **Kit pin.** The bundle is rebuilt against `@casys/mcp-view@0.9.3` and
-  `@casys/mcp-view-components@0.7.0` (`Casys-AI/mcp-server@59eeb37`), whose text
-  token fallback is `#101519`.
+  `@casys/mcp-view-components@0.8.0` (`Casys-AI/mcp-server@f9cb849`), with an
+  audited CI source pin and frozen viewer dependency lock.
 - **Reproducible documentation capture.** `deno task capture:docs` renders the
   committed bundle with the real `build123d_export` fixture
   `docs/fixtures/bracket-r1.{py,export.json,glb}` (produced by the published

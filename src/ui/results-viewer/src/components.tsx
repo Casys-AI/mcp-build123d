@@ -7,11 +7,10 @@ import {
   Button,
   Card,
   definePreactComponent,
-  ElementBody,
   ElementIdent,
-  ElementProvenance,
   ElementSection,
   EmptyState,
+  FocusedView,
   KeyValueList,
   MetricGrid,
   type PreactSurfaceComponentProps,
@@ -37,7 +36,6 @@ import {
   type GeometryFactSection,
   geometryFactSections,
   geometryIdentity,
-  geometryProvenance,
   geometryReadings,
   geometryReference,
   isCanonicalRecordedSession,
@@ -45,58 +43,64 @@ import {
   isViewerSessionGeometryData,
 } from "./component-model.ts";
 import { type CadSceneController, mountCadScene } from "./scene.ts";
+import { geometryMessages } from "./locale.ts";
 
 type Props = PreactSurfaceComponentProps<GeometryComponentData>;
 
 /**
- * Standalone default and viewer-session surface: one bounded datasheet with an
- * identity line, at most four readings, the 3D model, titled fact sections and
- * one provenance line. The four small components below slice the same model
- * for Compose hosts.
+ * Model and recorded state stay visible; exact technical details are available
+ * through the kit's native disclosure. The small components below expose the
+ * same data to a host that explicitly chooses them.
  */
 const GeometryDatasheet = ({ data, context }: Props) => {
   const locale = context.hostContext.locale;
+  const t = geometryMessages(locale);
   const identity = geometryIdentity(data, locale);
   const readings = geometryReadings(data, locale);
-  const provenance = geometryProvenance(data);
   return (
-    <SemanticElement
+    <FocusedView
       className="geometry-datasheet"
-      reference={geometryReference(data)}
-      density="card"
-      ident={
-        <ElementIdent
-          marker={<Badge tone={identity.tone}>{identity.marker}</Badge>}
-          label={identity.label}
-          detail={identity.detail}
+      label={identity.label}
+      hostContext={context.hostContext}
+      status={
+        <SemanticElement
+          reference={geometryReference(data)}
+          density="row"
+          ident={
+            <ElementIdent
+              marker={<Badge tone={identity.tone}>{identity.marker}</Badge>}
+              label={identity.label}
+              detail={identity.detail}
+            />
+          }
         />
       }
-      body={
-        <ElementBody>
+      primary={
+        <>
+          <GeometryScene data={data} context={context} />
           {readings.length > 0 && (
             <MetricGrid className="geometry-readings" items={readings} />
           )}
-          <ElementSection title="3D model">
-            <GeometryScene data={data} context={context} />
-          </ElementSection>
+        </>
+      }
+      detailsLabel={t("details")}
+      details={
+        <>
           <FactSections sections={geometryFactSections(data, locale)} />
           {!isViewerSessionGeometryData(data) && (
-            <ElementSection title="Artifacts">
+            <ElementSection title={t("artifacts")}>
               <Artifacts files={data.result.files} locale={locale} />
             </ElementSection>
           )}
-        </ElementBody>
+        </>
       }
-      provenance={provenance && (
-        <ElementProvenance label={provenance.label} value={provenance.value} />
-      )}
     />
   );
 };
 
-/** Reader-worded facts in one aligned column; the inspector layout is for field dumps. */
+/** Technical fields remain exact and belong to the secondary inspector. */
 const Facts = ({ items }: { readonly items: readonly GeometryFact[] }) => (
-  <KeyValueList layout="facts" items={items} />
+  <KeyValueList layout="inspector" items={items} />
 );
 
 const FactSections = (
@@ -135,14 +139,12 @@ const Artifacts = (
     )
     : (
       <EmptyState>
-        No export for this calculation. Use build123d_export to produce STEP,
-        STL or GLB files.
+        {geometryMessages(locale)("noExports")}
       </EmptyState>
     );
 
 const GeometryStatus = ({ data, context }: Props) => {
   const identity = geometryIdentity(data, context.hostContext.locale);
-  const provenance = geometryProvenance(data);
   return (
     <SemanticElement
       reference={geometryReference(data)}
@@ -154,22 +156,19 @@ const GeometryStatus = ({ data, context }: Props) => {
           detail={identity.detail}
         />
       }
-      provenance={provenance && (
-        <ElementProvenance label={provenance.label} value={provenance.value} />
-      )}
     />
   );
 };
 
 const GeometryMetrics = ({ data, context }: Props) => {
   const locale = context.hostContext.locale;
+  const t = geometryMessages(locale);
   return (
-    <Card title="Readings" eyebrow="Exact OCCT measures">
+    <Card title={t("readings")} eyebrow={t("exactMeasures")}>
       {isViewerSessionGeometryData(data)
         ? (
           <EmptyState>
-            No Build123d execution metrics are included in this read-only
-            geometry session.
+            {t("noSessionMetrics")}
           </EmptyState>
         )
         : (
@@ -187,10 +186,10 @@ const GeometryMetrics = ({ data, context }: Props) => {
 
 const GeometryCanvas = ({ data, context }: Props) => (
   <Card
-    title="3D model"
+    title={geometryMessages(context.hostContext.locale)("model")}
     eyebrow={isViewerSessionGeometryData(data)
-      ? "Read-only projection"
-      : "Geometry inspection"}
+      ? geometryMessages(context.hostContext.locale)("readOnlyProjection")
+      : geometryMessages(context.hostContext.locale)("geometryInspection")}
   >
     <GeometryScene data={data} context={context} />
   </Card>
@@ -200,16 +199,23 @@ const ExportArtifacts = ({ data, context }: Props) =>
   isViewerSessionGeometryData(data)
     ? (
       <Card
-        title="Provenance"
+        title={geometryMessages(context.hostContext.locale)("provenance")}
         eyebrow={isGeometryReviewSession(data.session)
-          ? "Project draft · no canonical or proof claim"
-          : "Canonical Thread evidence"}
+          ? geometryMessages(context.hostContext.locale)("projectDraft")
+          : geometryMessages(context.hostContext.locale)("canonicalEvidence")}
       >
-        <FactSections sections={geometryFactSections(data)} />
+        <FactSections
+          sections={geometryFactSections(data, context.hostContext.locale)}
+        />
       </Card>
     )
     : (
-      <Card title="Artifacts" eyebrow="Immutable resources">
+      <Card
+        title={geometryMessages(context.hostContext.locale)("artifacts")}
+        eyebrow={geometryMessages(context.hostContext.locale)(
+          "immutableResources",
+        )}
+      >
         <Artifacts
           files={data.result.files}
           locale={context.hostContext.locale}
@@ -234,6 +240,7 @@ type SceneProps = Pick<Props, "data" | "context">;
 /** The Three.js stage in a kit Slot3D, with its controls and a literal status line. */
 const GeometryScene = ({ data, context }: SceneProps) => {
   const locale = context.hostContext.locale;
+  const t = geometryMessages(locale);
   const viewerSession = isViewerSessionGeometryData(data)
     ? data.session
     : undefined;
@@ -252,7 +259,7 @@ const GeometryScene = ({ data, context }: SceneProps) => {
   const controller = useRef<CadSceneController>();
   const [wireframe, setWireframe] = useState(false);
   const [phase, setPhase] = useState<CanvasPhase>(() =>
-    initialCanvasPhase(sessionProjection, gltf !== undefined)
+    initialCanvasPhase(sessionProjection, gltf !== undefined, locale)
   );
 
   useEffect(() => {
@@ -262,13 +269,13 @@ const GeometryScene = ({ data, context }: SceneProps) => {
     setWireframe(false);
 
     if (!target || (!gltf && !sessionAvailable)) {
-      setPhase(initialCanvasPhase(sessionProjection, false));
+      setPhase(initialCanvasPhase(sessionProjection, false, locale));
       return;
     }
 
     let cancelled = false;
     let mounted: CadSceneController | undefined;
-    setPhase({ kind: "loading", detail: "Loading the verified GLB resource…" });
+    setPhase({ kind: "loading", detail: t("loadingResource") });
 
     void (async () => {
       try {
@@ -309,9 +316,7 @@ const GeometryScene = ({ data, context }: SceneProps) => {
         if (cancelled) return;
         setPhase({
           kind: "error",
-          detail: error instanceof Error
-            ? error.message
-            : "The 3D model could not be loaded.",
+          detail: error instanceof Error ? error.message : t("modelLoadFailed"),
         });
       }
     })();
@@ -332,29 +337,29 @@ const GeometryScene = ({ data, context }: SceneProps) => {
   ]);
 
   const status = phase.kind === "ready"
-    ? `${viewerSession ? "Projection digest verified" : "Verified GLB"} · ${
+    ? `${t(viewerSession ? "projectionVerified" : "glbVerified")} · ${
       formatBytes(phase.bytes, locale)
-    } · Orbit · Pan · Zoom`
+    } · ${t("navigation")}`
     : phase.kind === "loading"
-    ? "Loading the verified GLB resource…"
+    ? t("loadingResource")
     : phase.kind === "error"
-    ? "3D preview unavailable"
-    : "No interactive geometry";
+    ? t("previewUnavailable")
+    : t("noGeometry");
 
   return (
     <>
-      <Toolbar className="geometry-scene-controls" label="3D model controls">
+      <Toolbar className="geometry-scene-controls" label={t("controls")}>
         <Button
           disabled={phase.kind !== "ready"}
           onClick={() => controller.current?.fit()}
         >
-          Fit
+          {t("fit")}
         </Button>
         <Button
           disabled={phase.kind !== "ready"}
           onClick={() => controller.current?.reset()}
         >
-          Reset
+          {t("reset")}
         </Button>
         <Button
           disabled={phase.kind !== "ready"}
@@ -366,15 +371,15 @@ const GeometryScene = ({ data, context }: SceneProps) => {
               return next;
             })}
         >
-          Wireframe
+          {t("wireframe")}
         </Button>
       </Toolbar>
       <Slot3D
         label={canonicalSession
-          ? "Interactive recorded GLB projection linked to Digital Thread geometry"
+          ? t("recordedModelLabel")
           : reviewSession
-          ? "Interactive Project geometry review projection"
-          : "Interactive build123d 3D model"}
+          ? t("reviewModelLabel")
+          : t("modelLabel")}
         statusLabel={status}
       >
         <div class="cad-stage">
@@ -388,13 +393,13 @@ const GeometryScene = ({ data, context }: SceneProps) => {
           {phase.kind === "ready" && (
             <div class="cad-hud" aria-live="polite">
               <Badge tone="success">
-                {viewerSession ? "Projection digest verified" : "Verified GLB"}
+                {t(viewerSession ? "projectionVerified" : "glbVerified")}
               </Badge>
               <span>
                 {formatCount(phase.meshes, locale)}{" "}
-                {phase.meshes === 1 ? "mesh" : "meshes"} ·{" "}
+                {t(phase.meshes === 1 ? "mesh" : "meshes")} ·{" "}
                 {formatCount(phase.nodes, locale)}{" "}
-                {phase.nodes === 1 ? "node" : "nodes"}
+                {t(phase.nodes === 1 ? "node" : "nodes")}
               </span>
             </div>
           )}
@@ -402,13 +407,13 @@ const GeometryScene = ({ data, context }: SceneProps) => {
             <div class="cad-state-overlay">
               <StateMessage
                 title={phase.kind === "loading"
-                  ? "Loading interactive geometry"
+                  ? t("loadingGeometry")
                   : phase.kind === "error"
-                  ? "3D preview unavailable"
+                  ? t("previewUnavailable")
                   : sessionProjection?.status === "unresolved" ||
                       sessionProjection?.status === "unavailable"
-                  ? `Projection ${sessionProjection.status}`
-                  : "No interactive geometry"}
+                  ? t("projectionStatus", { status: sessionProjection.status })
+                  : t("noGeometry")}
                 tone={phase.kind === "error"
                   ? "danger"
                   : phase.kind === "loading"
@@ -476,9 +481,11 @@ export const BUILD123D_COMPONENT_REGISTRY = defineComponentRegistry<
 function initialCanvasPhase(
   projection: Build123dRecordedGeometryProjection | undefined,
   hasToolGltf: boolean,
+  locale?: string,
 ): CanvasPhase {
+  const t = geometryMessages(locale);
   if (projection?.status === "available" || hasToolGltf) {
-    return { kind: "loading", detail: "Loading the verified GLB resource…" };
+    return { kind: "loading", detail: t("loadingResource") };
   }
   if (
     projection?.status === "unavailable" || projection?.status === "unresolved"
@@ -487,7 +494,6 @@ function initialCanvasPhase(
   }
   return {
     kind: "empty",
-    detail:
-      "Add the gltf format to build123d_export to mount the 3D component.",
+    detail: t("requestGltf"),
   };
 }

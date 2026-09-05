@@ -272,7 +272,7 @@ Deno.test("results viewer datasheet derives identity, readings, facts and proven
     ],
   }]);
   assertEquals(geometryProvenance(data), {
-    label: "GLTF artifact",
+    label: "GLTF · Artifact",
     value: `sha256:${"d".repeat(64)}`,
   });
 });
@@ -476,7 +476,7 @@ Deno.test("result viewer uses the standard resource client and shared components
       "Badge",
       "Button",
       "Card",
-      "ElementProvenance",
+      "FocusedView",
       "ElementSection",
       "EmptyState",
       "KeyValueList",
@@ -492,4 +492,40 @@ Deno.test("result viewer uses the standard resource client and shared components
   assertStringIncludes(components, "readServerResource");
   assertEquals(components.includes("gltfViewerReadArguments"), false);
   assertEquals(components.includes("build123d_export_read"), false);
+});
+
+Deno.test("French interface labels preserve measurements, contract states and raw diagnostics", () => {
+  const parsed = parseGeometryResult({
+    schemaVersion: "1.0",
+    kind: "execution",
+    metrics: METRICS,
+    files: [],
+  });
+  if (!parsed.ok) throw new Error(parsed.error);
+  const data = { result: parsed.value };
+  assertEquals(geometryIdentity(data, "fr-CA"), {
+    marker: "computed",
+    label: "Géométrie calculée",
+    detail: "build123d · 1 solide · 6 faces · 12 arêtes",
+    tone: "success",
+  });
+  assertEquals(geometryReadings(data, "fr")[2], {
+    id: "mass",
+    label: "Masse",
+    value: "0,0027",
+    unit: "kg",
+  });
+  const diagnostic = "source.unresolved <unaltered>";
+  assertEquals(
+    geometryStateFromToolResult({
+      isError: true,
+      content: [{ type: "text", text: diagnostic }],
+    }, { locale: "fr" }),
+    {
+      kind: "error",
+      title: "Échec du calcul",
+      code: TOOL_ERROR_CODE,
+      message: diagnostic,
+    },
+  );
 });

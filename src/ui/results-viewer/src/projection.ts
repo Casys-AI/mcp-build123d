@@ -11,6 +11,7 @@ import {
 } from "../../recorded-view-session.ts";
 import type { GeometryComponentData } from "./component-model.ts";
 import { parseGeometryResult } from "./contract.ts";
+import { geometryMessages } from "./locale.ts";
 
 /** `code` of the danger state shown when the tool itself reported an error. */
 export const TOOL_ERROR_CODE = "tool-error";
@@ -39,21 +40,23 @@ export type GeometryDisplayState =
 /** A tool error is shown with its own text; a malformed envelope with the parser's. */
 export function geometryStateFromToolResult(
   result: GeometryToolResult,
+  host?: { readonly locale?: string },
 ): GeometryDisplayState {
+  const t = geometryMessages(host?.locale);
   if (result.isError) {
     return {
       kind: "error",
-      title: "Computation failed",
+      title: t("computationFailed"),
       code: TOOL_ERROR_CODE,
       message: mcpErrorText(result.content) ??
-        "The build123d computation returned an error.",
+        t("computationError"),
     };
   }
   const parsed = parseGeometryResult(result.structuredContent);
   if (!parsed.ok) {
     return {
       kind: "error",
-      title: "Result not displayable",
+      title: t("resultRejected"),
       code: RESULT_REJECTED_CODE,
       message: parsed.error,
     };
@@ -68,12 +71,13 @@ export function geometryStateFromToolResult(
 export function geometryStateFromViewerSession(
   value: unknown,
   readResource: Build123dRecordedResourceReader,
+  locale?: string,
 ): GeometryDisplayState {
   const parsed = parseBuild123dViewerSession(value);
   if (!parsed.ok) {
     return {
       kind: "error",
-      title: "Session rejected",
+      title: geometryMessages(locale)("sessionRejected"),
       code: SESSION_REJECTED_CODE,
       message: parsed.error,
     };

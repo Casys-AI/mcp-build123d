@@ -17,7 +17,7 @@ const root = dirname(dirname(fromFileUrl(import.meta.url)));
 const fixtureDirectory = join(root, "docs/fixtures");
 const viewerPath = join(root, "src/ui/dist/results-viewer/index.html");
 const outputPath = join(root, "docs/assets/build123d-export-viewer.png");
-const WINDOW = { width: 1040, height: 1020 };
+const WINDOW = { width: 1040, height: 780 };
 /** Chrome and ffmpeg both finish in seconds; a deadline keeps a stuck one from hanging. */
 const TOOL_DEADLINE_MS = 60_000;
 

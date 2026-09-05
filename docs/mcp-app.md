@@ -109,23 +109,34 @@ process-local artifact-store lookup, and does not require `allow-same-origin`.
 The App advertises independently mountable components during `ui/initialize`.
 For direct tool results, a Compose host can choose the component subset, order,
 grid, and gap. Without a requested surface, the default is one geometry
-datasheet. Recorded sessions always mount that same datasheet.
+datasheet. Recorded sessions always mount that same datasheet. The model and
+literal status stay visible; the keyboard-accessible details disclosure starts
+closed and retains every recorded identity, fingerprint, and producer field.
 
-| Component key                  | Presentation                                                                                  |
-| ------------------------------ | --------------------------------------------------------------------------------------------- |
-| `build123d.geometry-datasheet` | Literal status, at most four readings, verified 3D model, titled facts, artifacts, provenance |
-| `build123d.geometry-status`    | One-row computation/export or session identity with its provenance                            |
-| `build123d.geometry-metrics`   | OCCT readings, topology, bounding box, center of mass, optional density                       |
-| `build123d.geometry-canvas`    | Verified GLB resource and interactive Three.js scene                                          |
-| `build123d.export-artifacts`   | Resource URIs, digests, MIME types, byte sizes; session basis and capture provenance          |
+| Component key                  | Presentation                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `build123d.geometry-datasheet` | Literal status, verified 3D model and at most four readings; facts, artifacts and provenance in details |
+| `build123d.geometry-status`    | Short computation/export or recorded-session identity and literal status                                |
+| `build123d.geometry-metrics`   | OCCT readings, topology, bounding box, center of mass, optional density                                 |
+| `build123d.geometry-canvas`    | Verified GLB resource and interactive Three.js scene                                                    |
+| `build123d.export-artifacts`   | Resource URIs, digests, MIME types, byte sizes; session basis and capture provenance                    |
 
 Each is a Preact component built with the optional `@casys/mcp-view-components`
-package: `SemanticElement` and its ident, section, and provenance slots,
-`MetricGrid`, `KeyValueList`, `ArtifactRow`, `Slot3D`, `Card`, `Badge`,
-`Button`, `Toolbar`, and system states. The entry point uses
+package: `FocusedView` with its native `Disclosure`, `SemanticElement` and its
+ident and section slots, `MetricGrid`, `KeyValueList`, `ArtifactRow`, `Slot3D`,
+`Card`, `Badge`, `Button`, `Toolbar`, and system states. The entry point uses
 `startPreactSurfaceApp`; the lifecycle/router is provided by renderer-neutral
 `@casys/mcp-view`. Local styles cover the Three.js viewport and CAD layout.
-Numbers follow the host `locale` from `ui/initialize`.
+Interface labels use the shared `createTranslator` helper with provider-owned
+English and French dictionaries. Numbers follow the host `locale`; recorded
+states, identifiers, units, and diagnostic messages remain exact.
+
+The scene follows the host theme at initialization and on subsequent
+`ui/notifications/host-context-changed` notifications. With
+`themeUpdates: "in-place"`, a theme-only update changes the canvas, fog, grid,
+and overlay palette without remounting the canvas, reading the GLB again, or
+resetting its camera and wireframe state. Other host-context changes retain the
+shared surface lifecycle.
 
 Repeated canvas instances have independent controls and Three.js cleanup. No
 component-level semantic Compose event is emitted or accepted: the result
@@ -141,8 +152,8 @@ motion, fit, or requirement semantics.
 ## Build the viewer
 
 The committed bundle uses `@casys/mcp-view@0.9.3` and
-`@casys/mcp-view-components@0.7.1`, built from `Casys-AI/mcp-server` commit
-`342c1b7456c011d3f21cad988f9dde23bcbecae0`. Use that checkout for both module
+`@casys/mcp-view-components@0.8.0`, built from `Casys-AI/mcp-server` commit
+`f9cb8493edfd555c58b9fc6f5601fe444fc78046`. Use that checkout for both module
 entries:
 
 ```bash

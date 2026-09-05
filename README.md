@@ -29,10 +29,12 @@ exact STEP bytes ──► build123d_observe_assembly_integrity ──► factua
 
 ![build123d_export result in the MCP App viewer](docs/assets/build123d-export-viewer.png)
 
-This is the shipped viewer rendering a real `build123d_export` result
-(`docs/fixtures/bracket-r1.py`, run in the published provider image)—not a mock
-dashboard. `deno task capture:docs` regenerates it from the committed fixture
-and bundle.
+The viewer renders a real `build123d_export` result from
+`docs/fixtures/bracket-r1.py`, run in the published provider image. The model
+and its status stay visible; geometry details and provenance open on demand. It
+follows the host's light or dark theme and uses English or French labels.
+`deno task capture:docs` regenerates the image from the committed fixture and
+bundle.
 
 At a glance:
 
@@ -233,13 +235,14 @@ direct call to this standalone server.
 
 `build123d_execute` and `build123d_export` provide a compact geometry datasheet
 in compatible MCP Apps hosts. Inspect the model with orbit, pan, zoom, fit,
-reset, and wireframe controls, alongside its measured geometry and export
-artifacts. Text responses remain available to every MCP client.
+reset, and wireframe controls. Open the details to inspect measured geometry,
+export artifacts, and exact provenance. Text responses remain available to every
+MCP client.
 
 The same viewer presents recorded Digital Thread geometry and provisional
-Project reviews, keeping their status and provenance visible. It uses MCP View
-components that a Compose host can also mount individually: geometry, readings,
-status, or artifacts.
+Project reviews, keeping their status visible and exact provenance accessible.
+It uses MCP View components that a Compose host can also mount individually:
+geometry, readings, status, or artifacts.
 
 See the [MCP App documentation](docs/mcp-app.md) for session contracts, resource
 transport, component composition, local builds, and screenshot capture.

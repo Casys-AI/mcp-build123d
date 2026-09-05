@@ -12,6 +12,7 @@ import {
   geometryStateFromViewerSession,
 } from "./projection.ts";
 import { createMcpAppHostResourceBridge } from "./resource-bridge.ts";
+import { geometryMessages } from "./locale.ts";
 
 /** The status class every build123d message carries, in and out of the App. */
 const BUILD123D_STATUS_CLASS = "build123d-viewer-state";
@@ -43,16 +44,22 @@ void startPreactSurfaceApp({
   info: BUILD123D_MCP_APP_INFO,
   registry: BUILD123D_COMPONENT_REGISTRY,
   strict: true,
+  // The scene observes theme tokens; keeping its mount preserves camera and GLB.
+  themeUpdates: "in-place",
   surfaceClassName: "build123d-component-surface",
   statusClassName: BUILD123D_STATUS_CLASS,
-  loadingLabel: "Receiving a build123d geometry result or recorded session…",
+  loadingLabel: (locale) => geometryMessages(locale)("receiving"),
   fromToolResult: geometryStateFromToolResult,
   viewerSession: {
     // Every `viewer.session.apply` payload addresses this whole-view App; the
     // strict parser decides in `toState`, and a rejection is shown, never dropped.
     validate: (_value: unknown): _value is unknown => true,
-    toState: (value) =>
-      geometryStateFromViewerSession(value, appHostResourceBridge.read),
+    toState: (value, host) =>
+      geometryStateFromViewerSession(
+        value,
+        appHostResourceBridge.read,
+        host.locale,
+      ),
   },
   // Recorded sessions own their whole-view surface; direct results follow the
   // host selection, with the datasheet as the standalone default.
