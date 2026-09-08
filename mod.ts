@@ -38,6 +38,7 @@ export {
   Build123dArtifactError,
   Build123dArtifactStore,
   createBuild123dExportExecution,
+  parseBuild123dStepArtifactUri,
 } from "./src/artifacts.ts";
 export type {
   Build123dArtifactFormat,
@@ -45,6 +46,8 @@ export type {
   Build123dExportExecution,
   Build123dExportOutput,
   CreateBuild123dExportExecutionInput,
+  OwnedStepResolver,
+  OwnedStepResource,
   PublishedCadExportFile,
 } from "./src/artifacts.ts";
 export { createCadMcpApp } from "./src/server-app.ts";
@@ -61,7 +64,9 @@ export {
   ASSEMBLY_INTEGRITY_OUTPUT_SCHEMA,
   ASSEMBLY_INTEGRITY_TOOL,
   assemblyIntegrityTools,
+  createAssemblyIntegrityTools,
 } from "./src/tools/assembly-integrity.ts";
+export type { CreateAssemblyIntegrityToolsOptions } from "./src/tools/assembly-integrity.ts";
 export { RESULTS_VIEWER_URI } from "./src/ui/constants.ts";
 export {
   BUILD123D_CANONICAL_GEOMETRY_TOOL,
@@ -139,7 +144,9 @@ export type {
   AssemblyIntegrityPair,
   AssemblyIntegrityProducer,
   AssemblyIntegrityRigidTransform,
+  AssemblyIntegrityStepResource,
   AssemblyIntegrityTopology,
+  ObserveAssemblyIntegrityDependencies,
 } from "./src/api/assembly-integrity-bridge.ts";
 export { MCP_BUILD123D_VERSION } from "./src/version.ts";
 export type {

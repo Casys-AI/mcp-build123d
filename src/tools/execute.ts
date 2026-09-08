@@ -85,6 +85,17 @@ function sanitizeBasename(name: string): string {
   return safe;
 }
 
+/** Sanitized basename exceeded the POSIX-backed character bound. */
+export class ExportBasenameLengthError extends Error {
+  constructor(sanitizedLength: number) {
+    super(
+      "[build123d_export] Sanitized file name length " +
+        `${sanitizedLength} exceeds ${MAXIMUM_EXPORT_BASENAME_LENGTH} characters.`,
+    );
+    this.name = "ExportBasenameLengthError";
+  }
+}
+
 /** Promotes one mutable delivery export into a server-owned artifact resource. */
 export interface ExportArtifactPublisher {
   publishExports(
@@ -364,8 +375,11 @@ export function createExecuteTools(
             maxLength: MAXIMUM_EXPORT_BASENAME_LENGTH,
             description:
               "Base file name without extension (e.g. 'bracket'). Directory " +
-              "components are stripped. Capped so the longest imposed " +
-              "extension ('.step') stays within 255 bytes.",
+              "components are stripped. JSON Schema maxLength is 250 Unicode " +
+              "code points; after the existing safe-character mapping the " +
+              "basename must still be at most 250 characters so the longest " +
+              "imposed extension ('.step') stays within 255 POSIX NAME_MAX " +
+              "bytes. Schema alone does not bound UTF-16 expansion.",
           },
           density_kg_m3: {
             type: "number",
@@ -397,6 +411,9 @@ export function createExecuteTools(
         const script = args.script as string;
         const formats = args.formats as ExportSpec["format"][];
         const basename = sanitizeBasename(args.name as string);
+        if (basename.length > MAXIMUM_EXPORT_BASENAME_LENGTH) {
+          throw new ExportBasenameLengthError(basename.length);
+        }
         // Keep an injected application root coupled to the publisher. The
         // direct-library fallback remains environment-configurable for callers
         // that assemble their own publisher.

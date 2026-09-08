@@ -21,6 +21,7 @@ import type {
   CadToolHandler,
   ExportArtifactPublisher,
 } from "./tools/mod.ts";
+import type { OwnedStepResolver } from "./artifacts.ts";
 import type { MCPToolMeta, ToolAnnotations } from "@casys/mcp-server";
 
 export {
@@ -46,6 +47,8 @@ export interface CadToolsClientOptions {
   artifactPublisher?: ExportArtifactPublisher;
   /** Server-owned delivery root shared with the artifact publisher. */
   exportDirectory?: string;
+  /** Server-assembly owned STEP resolver. Never an MCP input. */
+  resolveOwnedStep?: OwnedStepResolver;
 }
 
 /** Client for executing CAD tools. */
@@ -56,6 +59,7 @@ export class CadToolsClient {
     const catalogue = createCadToolCatalogue({
       artifactPublisher: options?.artifactPublisher,
       exportDirectory: options?.exportDirectory,
+      resolveOwnedStep: options?.resolveOwnedStep,
     });
     this.tools = options?.categories
       ? options.categories.flatMap((cat) =>

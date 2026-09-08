@@ -9,6 +9,8 @@ export {
   ASSEMBLY_INTEGRITY_OUTPUT_SCHEMA,
   ASSEMBLY_INTEGRITY_TOOL,
   assemblyIntegrityTools,
+  createAssemblyIntegrityTools,
+  type CreateAssemblyIntegrityToolsOptions,
 } from "./assembly-integrity.ts";
 export {
   createExecuteTools,
@@ -17,12 +19,16 @@ export {
   type ExportArtifactPublisher,
 } from "./execute.ts";
 
-import { assemblyIntegrityTools } from "./assembly-integrity.ts";
+import {
+  assemblyIntegrityTools,
+  createAssemblyIntegrityTools,
+} from "./assembly-integrity.ts";
 import {
   createExecuteTools,
   type CreateExecuteToolsOptions,
   executeTools,
 } from "./execute.ts";
+import type { OwnedStepResolver } from "../artifacts.ts";
 import type { CadTool } from "./types.ts";
 
 export interface CadToolCatalogue {
@@ -30,12 +36,21 @@ export interface CadToolCatalogue {
   readonly toolsByCategory: Record<string, CadTool[]>;
 }
 
+export interface CreateCadToolCatalogueOptions
+  extends CreateExecuteToolsOptions {
+  /** Server-assembly owned STEP resolver. Never an MCP input. */
+  resolveOwnedStep?: OwnedStepResolver;
+}
+
 /** Build the catalogue around the server-owned export artifact registry. */
 export function createCadToolCatalogue(
-  options: CreateExecuteToolsOptions = {},
+  options: CreateCadToolCatalogueOptions = {},
 ): CadToolCatalogue {
   const execution = createExecuteTools(options);
-  const allTools = [...execution, ...assemblyIntegrityTools];
+  const observation = createAssemblyIntegrityTools({
+    resolveOwnedStep: options.resolveOwnedStep,
+  });
+  const allTools = [...execution, ...observation];
   return {
     allTools,
     toolsByCategory: {

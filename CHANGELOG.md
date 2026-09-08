@@ -4,12 +4,27 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
 ## [Unreleased]
 
-- **Export basename bound.** `build123d_export` `name` is capped at 250
-  characters so `"<name>.step"` (the longest imposed extension) stays within the
-  255-byte POSIX `NAME_MAX`. The previous 251-character bound left a valid STEP
-  request at 256 bytes. A 251-character name is rejected by schema validation
-  before Python or delivery staging. Path-component stripping and safe-character
-  sanitization are unchanged.
+- **Owned STEP assembly observation.** `build123d_observe_assembly_integrity`
+  accepts either the existing inline digest-bound STEP or a closed
+  `stepResource` descriptor (`uri`, `mimeType`, `sha256`, `bytes`) for an
+  immutable `model/step` artifact issued by this process's
+  `Build123dArtifactStore`. The forms are exclusive. The URI must be
+  `casys://build123d/artifacts/<lowercase-sha256>.step`; digest and size must
+  match the URI and the registered object; owned bytes are rehashed before
+  observation. Unknown, non-STEP, digest- or size-mismatched, generic MCP, or
+  previous-process resources are rejected. Inline remains 128 MiB decoded; owned
+  artifacts stay at the existing 32 MiB per-object store bound. Observation
+  semantics and output schema are unchanged.
+- **Export basename bound.** `build123d_export` `name` is jointly bounded by
+  JSON Schema `maxLength` 250 (Unicode code points) and a post-sanitization
+  guard of 250 safe characters, so `"<name>.step"` stays within the 255-byte
+  POSIX `NAME_MAX`. Schema alone is not Unicode-safe: AJV counts code points,
+  while the existing sanitizer maps each disallowed UTF-16 code unit to `_`. A
+  251-character ASCII name is rejected by schema before Python or staging; a
+  250-emoji name passes schema then is rejected by the sanitizer-length guard
+  before mkdir, Python, or staging. Path-component stripping and the
+  safe-character mapping are unchanged. 250 ASCII characters, and any name whose
+  sanitized form is still ≤250 characters, remain accepted.
 - **Public delivery hygiene.** Non-publishing `check` and `image-smoke` jobs now
   run on pull requests targeting `main` as well as pushes; JSR and GHCR
   publication remain tag-only. Every GitHub Action reference is pinned to an

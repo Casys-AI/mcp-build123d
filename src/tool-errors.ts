@@ -11,6 +11,7 @@ import {
   AssemblyIntegrityObservationError,
 } from "./api/assembly-integrity-bridge.ts";
 import { Build123dArtifactError } from "./artifacts.ts";
+import { ExportBasenameLengthError } from "./tools/execute.ts";
 
 export const BUILD123D_TOOL_ERROR_SCHEMA = "build123d-tool-error/1.0" as const;
 
@@ -107,6 +108,9 @@ function resultFor(
 }
 
 function classify(error: unknown): PublicToolFailure {
+  if (error instanceof ExportBasenameLengthError) {
+    return INVALID_ARGUMENTS_FAILURE;
+  }
   if (error instanceof Build123dArtifactError) {
     return {
       code: error.code,
@@ -119,7 +123,7 @@ function classify(error: unknown): PublicToolFailure {
       code: "assembly_integrity.input_invalid",
       message: "Assembly-integrity input is invalid.",
       recovery:
-        "Provide one exact digest-bound padded-base64 model/step input; do not pass a path, code, tolerance, transform, or runtime option.",
+        "Provide either one exact digest-bound padded-base64 model/step input or one current-process owned STEP resource descriptor; do not pass a path, code, tolerance, transform, or runtime option.",
       retryable: false,
     };
   }

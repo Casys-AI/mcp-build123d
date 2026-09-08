@@ -76,6 +76,7 @@ export function createCadMcpApp(
     ...(options.categories ? { categories: options.categories } : {}),
     artifactPublisher: artifactStore,
     exportDirectory: options.exportDirectory,
+    resolveOwnedStep: (resource) => artifactStore.readOwnedStep(resource),
   });
 
   const handlers = toolsClient.buildHandlersMap();
