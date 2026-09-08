@@ -208,8 +208,12 @@ Consequences:
 - Loopback binding, safe export names, content-addressed resources, and timeouts
   are useful controls; none of them isolates the Python process. Put untrusted
   code behind a real sandbox with no secrets, network, or sensitive mounts.
-- HTTP authentication is not enabled by this bootstrap. Keep it on loopback or
-  add an authenticated deployment boundary before exposing it to a network.
+- HTTP starts with wildcard CORS and no authentication. CORS is not an
+  access-control mechanism. Keep HTTP on loopback, or place an authenticated
+  reverse proxy or equivalent authenticated deployment boundary in front of the
+  server before any non-loopback exposure.
+- Submitted Python is not sandboxed. It has host or container user authority,
+  including filesystem, process, and network access.
 
 Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 

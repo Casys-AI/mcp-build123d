@@ -660,6 +660,63 @@ Deno.test("wire schemas reject invalid requests without echoing host paths", asy
   }
 });
 
+Deno.test(
+  "wire schema rejects a 251-character export name before Python or staging",
+  async () => {
+    await withServerRoots(async ({ exportsDirectory, artifactsDirectory }) => {
+      const previousPython = Deno.env.get("BUILD123D_PYTHON_BIN");
+      const root = await Deno.makeTempDir({
+        prefix: "mcp-build123d-basename-limit-",
+      });
+      const interpreter = `${root}/python`;
+      const ran = `${root}/ran`;
+      await Deno.writeTextFile(
+        interpreter,
+        `#!/bin/sh\nprintf ran > ${shellQuote(ran)}\nexit 1\n`,
+        { mode: 0o700 },
+      );
+      Deno.env.set("BUILD123D_PYTHON_BIN", interpreter);
+      const assembly = testAssembly(exportsDirectory, artifactsDirectory);
+      const port = startOnFreePort();
+      const http = await assembly.app.startHttp({ port, onListen: () => {} });
+      try {
+        const response = await mcpRpc(port, "tools/call", {
+          name: "build123d_export",
+          arguments: {
+            script: "result = 1",
+            formats: ["step"],
+            name: "a".repeat(251),
+          },
+        });
+        const result = response.body.result as {
+          isError: boolean;
+          structuredContent: Record<string, unknown>;
+        };
+        assertEquals(result.isError, true);
+        assertEquals(
+          result.structuredContent.code,
+          "request.invalid_arguments",
+        );
+        assertEquals(
+          Array.from(Deno.readDirSync(exportsDirectory)).map((entry) =>
+            entry.name
+          ),
+          [],
+        );
+        await assertRejects(() => Deno.stat(ran), Deno.errors.NotFound);
+      } finally {
+        await http.shutdown();
+        if (previousPython === undefined) {
+          Deno.env.delete("BUILD123D_PYTHON_BIN");
+        } else {
+          Deno.env.set("BUILD123D_PYTHON_BIN", previousPython);
+        }
+        await Deno.remove(root, { recursive: true });
+      }
+    });
+  },
+);
+
 Deno.test("the result viewer is the only registered viewer and loads from its published path", async () => {
   const seen: string[] = [];
   const remote = Deno.serve(
