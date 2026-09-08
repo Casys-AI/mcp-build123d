@@ -24,7 +24,7 @@ agent writes build123d script
                                       │
                                resources/read (rehashes bytes)
 
-exact STEP bytes ──► build123d_observe_assembly_integrity ──► factual XCAF/OCCT assembly observation
+exact STEP bytes or current-process casys:// STEP ──► build123d_observe_assembly_integrity ──► factual XCAF/OCCT assembly observation
 ```
 
 ![build123d_export result in the MCP App viewer](docs/assets/build123d-export-viewer.png)
@@ -48,8 +48,9 @@ At a glance:
 - Mass is reported only from an explicit uniform density. No material or density
   is guessed.
 - `build123d_observe_assembly_integrity` accepts one bounded, digest-bound STEP
-  artifact only; it never executes caller code and returns factual import, unit,
-  topology, occurrence, placement and pair observations.
+  artifact, either inline or as a current-process owned `stepResource`; it never
+  executes caller code and returns factual import, unit, topology, occurrence,
+  placement and pair observations.
 
 ## Why CAD-as-code for agents
 
@@ -208,8 +209,12 @@ Consequences:
 - Loopback binding, safe export names, content-addressed resources, and timeouts
   are useful controls; none of them isolates the Python process. Put untrusted
   code behind a real sandbox with no secrets, network, or sensitive mounts.
-- HTTP authentication is not enabled by this bootstrap. Keep it on loopback or
-  add an authenticated deployment boundary before exposing it to a network.
+- HTTP starts with wildcard CORS and no authentication. CORS is not an
+  access-control mechanism. Keep HTTP on loopback, or place an authenticated
+  reverse proxy or equivalent authenticated deployment boundary in front of the
+  server before any non-loopback exposure.
+- Submitted Python is not sandboxed. It has host or container user authority,
+  including filesystem, process, and network access.
 
 Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
@@ -341,8 +346,10 @@ Example tool input using the script above:
 
 ### `build123d_observe_assembly_integrity`
 
-Observes one exact STEP Part 21 artifact without executing caller code. Its
-closed input is deliberately small:
+Observes one exact STEP Part 21 artifact without executing caller code. Supply
+exactly one of two closed forms — never both, neither, or extra fields.
+
+Inline digest-bound bytes, for STEP evidence this process does not already own:
 
 ```json
 {
@@ -355,10 +362,30 @@ closed input is deliberately small:
 }
 ```
 
-`bytes` must be positive and at most 128 MiB. The bridge rehashes and checks the
-Part 21 envelope before staging the bytes privately for a fixed OCCT/XCAF
-harness. There are no caller-selected paths, Python, tolerances, transforms or
-timeouts.
+`bytes` must be positive and at most 128 MiB.
+
+A current-process owned STEP resource, using the issued artifact identity fields
+`uri`, `mimeType`, `sha256`, and `bytes` (not `schemaVersion` or `format`):
+
+```json
+{
+  "stepResource": {
+    "uri": "casys://build123d/artifacts/<lowercase-sha256>.step",
+    "mimeType": "model/step",
+    "sha256": "<lowercase-sha256>",
+    "bytes": 32536
+  }
+}
+```
+
+The URI digest must match `sha256` and the registered object. Only an immutable
+`model/step` artifact issued by this process's artifact store is accepted;
+generic MCP resources, host paths, and leftover disk objects are not. After
+restart the store is empty, so a previous URI is unknown even if a forged file
+still exists. Owned artifacts stay at the store's 32 MiB per-object bound (the
+inline form remains 128 MiB). The bridge rehashes verified bytes and checks the
+Part 21 envelope before staging them privately for a fixed OCCT/XCAF harness.
+There are no caller-selected paths, Python, tolerances, transforms or timeouts.
 
 The versioned `build123d-assembly-integrity-observation/1.0` result carries the
 exact input identity, fixed method, and a closed producer block:

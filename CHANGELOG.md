@@ -4,6 +4,35 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
 ## [Unreleased]
 
+- **Owned STEP assembly observation.** `build123d_observe_assembly_integrity`
+  accepts either the existing inline digest-bound STEP or a closed
+  `stepResource` descriptor (`uri`, `mimeType`, `sha256`, `bytes`) for an
+  immutable `model/step` artifact issued by this process's
+  `Build123dArtifactStore`. The forms are exclusive. The URI must be
+  `casys://build123d/artifacts/<lowercase-sha256>.step`; digest and size must
+  match the URI and the registered object; owned bytes are rehashed before
+  observation. Unknown, non-STEP, digest- or size-mismatched, generic MCP, or
+  previous-process resources are rejected. Inline remains 128 MiB decoded; owned
+  artifacts stay at the existing 32 MiB per-object store bound. Observation
+  semantics and output schema are unchanged.
+- **Export basename bound.** `build123d_export` `name` is jointly bounded by
+  JSON Schema `maxLength` 250 (Unicode code points) and a post-sanitization
+  guard of 250 safe characters, so `"<name>.step"` stays within the 255-byte
+  POSIX `NAME_MAX`. Schema alone is not Unicode-safe: AJV counts code points,
+  while the existing sanitizer maps each disallowed UTF-16 code unit to `_`. A
+  251-character ASCII name is rejected by schema before Python or staging; a
+  250-emoji name passes schema then is rejected by the sanitizer-length guard
+  before mkdir, Python, or staging. Path-component stripping and the
+  safe-character mapping are unchanged. 250 ASCII characters, and any name whose
+  sanitized form is still ≤250 characters, remain accepted.
+- **Public delivery hygiene.** Non-publishing `check` and `image-smoke` jobs now
+  run on pull requests targeting `main` as well as pushes; JSR and GHCR
+  publication remain tag-only. Every GitHub Action reference is pinned to an
+  immutable upstream commit SHA. The README states the HTTP bootstrap's wildcard
+  CORS, lack of authentication, loopback-or-authenticated-proxy exposure rule,
+  and that submitted Python has host or container user authority and is not
+  sandboxed.
+
 ## [0.6.2] - 2026-09-05
 
 - **Geometry datasheet.** The results viewer default surface is now one bounded
@@ -14,6 +43,19 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
   closed-by-default details of the shared `FocusedView`. Recorded and review
   sessions mount the same datasheet. The four small catalog components remain
   for Compose hosts and slice the same model.
+- **Viewer sessions.** Direct `build123d_execute` / `build123d_export` results
+  remain the `io.casys.mcp-build123d.geometry-result/1.0` MCP tool envelope
+  (`schemaVersion: "1.0"`, `kind: "execution" | "export"`), with GLB bytes read
+  from the process-local artifact store through `resources/read`. Project
+  geometry reviews arrive as
+  `io.casys.mcp-build123d.geometry-review-session/1.0` (`provisional` or
+  `documentary`, Project revision, no Thread claim). Canonical Digital Thread
+  geometry arrives as `io.casys.mcp-build123d.recorded-geometry-session/1.0`
+  with `design.write-geometry@1` capture provenance. The App resource has
+  `ownership: "whole-view"`: a session owns the datasheet; recorded GLB bytes
+  travel on a dedicated host `MessagePort` and never through the provider
+  artifact store. Viewing standalone provider evidence does not admit it as
+  product geometry.
 - **Host locale.** Every number in the viewer follows `hostContext.locale` from
   `ui/initialize`. Interface labels use the shared translation helper with
   English and French dictionaries; missing locales fall back to English.
@@ -121,7 +163,8 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
   `build123d_execute` and `build123d_export`; `formats` is a unique 1–3 list;
   `density_kg_m3` is strictly positive; `timeout_ms` is an integer from 1 to
   60000; export `name` is capped at 251 characters so `"<name>.glb"` stays
-  within 255.
+  within 255. That bound did not cover the longer imposed `.step` extension; see
+  Unreleased for the 250-character correction.
 - **CI** installs `build123d==0.11.1`.
 
 ## [0.5.0] - 2026-08-25

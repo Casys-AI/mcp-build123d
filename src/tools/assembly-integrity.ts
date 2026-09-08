@@ -2,6 +2,11 @@
 
 import type { StructuredToolResult } from "@casys/mcp-server";
 import {
+  BUILD123D_ARTIFACT_URI_PREFIX,
+  BUILD123D_MAXIMUM_ARTIFACT_BYTES,
+  type OwnedStepResolver,
+} from "../artifacts.ts";
+import {
   ASSEMBLY_INTEGRITY_MAXIMUM_BASE64_CHARACTERS,
   ASSEMBLY_INTEGRITY_MAXIMUM_OCCURRENCES,
   ASSEMBLY_INTEGRITY_MAXIMUM_PAIRS,
@@ -56,35 +61,69 @@ function factSchema(value: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
-const INPUT_SCHEMA = {
+const STEP_RESOURCE_URI_PATTERN = `^${
+  BUILD123D_ARTIFACT_URI_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}[a-f0-9]{64}\\.step$`;
+
+const INLINE_STEP_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["step"],
+  required: ["mimeType", "sha256", "bytes", "blob"],
   properties: {
-    step: {
-      type: "object",
-      additionalProperties: false,
-      required: ["mimeType", "sha256", "bytes", "blob"],
-      properties: {
-        mimeType: { const: "model/step" },
-        sha256: SHA256_SCHEMA,
-        bytes: {
-          type: "integer",
-          minimum: 1,
-          maximum: ASSEMBLY_INTEGRITY_MAXIMUM_STEP_BYTES,
-        },
-        blob: {
-          type: "string",
-          minLength: 4,
-          maximum: ASSEMBLY_INTEGRITY_MAXIMUM_BASE64_CHARACTERS,
-          pattern:
-            "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-          description: "Exact padded base64 of the same model/step bytes.",
-        },
-      },
+    mimeType: { const: "model/step" },
+    sha256: SHA256_SCHEMA,
+    bytes: {
+      type: "integer",
+      minimum: 1,
+      maximum: ASSEMBLY_INTEGRITY_MAXIMUM_STEP_BYTES,
+    },
+    blob: {
+      type: "string",
+      minLength: 4,
+      maxLength: ASSEMBLY_INTEGRITY_MAXIMUM_BASE64_CHARACTERS,
+      pattern:
+        "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+      description: "Exact padded base64 of the same model/step bytes.",
     },
   },
 } as const;
+
+const STEP_RESOURCE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["uri", "mimeType", "sha256", "bytes"],
+  properties: {
+    uri: {
+      type: "string",
+      pattern: STEP_RESOURCE_URI_PATTERN,
+      description:
+        "Canonical current-process STEP URI casys://build123d/artifacts/<sha256>.step.",
+    },
+    mimeType: { const: "model/step" },
+    sha256: SHA256_SCHEMA,
+    bytes: {
+      type: "integer",
+      minimum: 1,
+      maximum: BUILD123D_MAXIMUM_ARTIFACT_BYTES,
+    },
+  },
+} as const;
+
+const INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  minProperties: 1,
+  maxProperties: 1,
+  properties: {
+    step: INLINE_STEP_SCHEMA,
+    stepResource: STEP_RESOURCE_SCHEMA,
+  },
+} as const;
+
+export interface CreateAssemblyIntegrityToolsOptions {
+  /** Server-assembly owned STEP resolver. Never an MCP input. */
+  resolveOwnedStep?: OwnedStepResolver;
+}
 
 const TOPOLOGY_SCHEMA: Record<string, unknown> = {
   type: "object",
@@ -238,31 +277,46 @@ export const ASSEMBLY_INTEGRITY_OUTPUT_SCHEMA: Record<string, unknown> = {
   },
 } as const;
 
-export const assemblyIntegrityTools: CadTool[] = [{
-  name: ASSEMBLY_INTEGRITY_TOOL,
-  description:
-    "Observe one exact STEP Part 21 artifact with the fixed OCCT/XCAF assembly " +
-    "integrity method. The input is a digest-bound padded-base64 STEP only; " +
-    "there is no caller code, path, tolerance, transform or runtime option. " +
-    "The result reports factual import, unit, topology, direct occurrence and " +
-    "pairwise observations, with unresolved or unavailable facts preserved.",
-  category: "execute",
-  annotations: {
-    title: "Observe STEP assembly integrity",
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-  },
-  inputSchema: INPUT_SCHEMA,
-  outputSchema: ASSEMBLY_INTEGRITY_OUTPUT_SCHEMA,
-  handler: async (args): Promise<StructuredToolResult> => {
-    const observation = await observeAssemblyIntegrity(args);
-    return {
-      content: observationText(observation),
-      structuredContent: observation,
-    };
-  },
-}];
+/** Create the observer. Resource form requires a current-process STEP resolver. */
+export function createAssemblyIntegrityTools(
+  options: CreateAssemblyIntegrityToolsOptions = {},
+): CadTool[] {
+  return [{
+    name: ASSEMBLY_INTEGRITY_TOOL,
+    description:
+      "Observe one exact STEP Part 21 artifact with the fixed OCCT/XCAF assembly " +
+      "integrity method. Supply either digest-bound padded-base64 STEP bytes or a " +
+      "closed stepResource descriptor for an immutable model/step artifact already " +
+      "issued by this server process. The two forms are exclusive. There is no " +
+      "caller code, path, tolerance, transform or runtime option. The result " +
+      "reports factual import, unit, topology, direct occurrence and pairwise " +
+      "observations, with unresolved or unavailable facts preserved.",
+    category: "execute",
+    annotations: {
+      title: "Observe STEP assembly integrity",
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    inputSchema: INPUT_SCHEMA,
+    outputSchema: ASSEMBLY_INTEGRITY_OUTPUT_SCHEMA,
+    handler: async (args): Promise<StructuredToolResult> => {
+      const observation = await observeAssemblyIntegrity(args, {
+        resolveOwnedStep: options.resolveOwnedStep,
+      });
+      return {
+        content: observationText(observation),
+        structuredContent: observation,
+      };
+    },
+  }];
+}
+
+/**
+ * Direct-library catalogue. Inline STEP remains usable; owned resources need
+ * createCadMcpApp() so the process artifact store can resolve them.
+ */
+export const assemblyIntegrityTools: CadTool[] = createAssemblyIntegrityTools();
 
 function observationText(observation: AssemblyIntegrityObservation): string {
   const importability = observation.importability.status === "observed"

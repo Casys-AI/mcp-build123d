@@ -107,6 +107,42 @@ export interface Build123dArtifactReference {
   readonly sha256: string;
 }
 
+/**
+ * Closed STEP identity reused from the issued artifact reference: uri, MIME,
+ * digest and size. Observation input omits schemaVersion and format.
+ */
+export interface OwnedStepResource
+  extends
+    Pick<Build123dArtifactReference, "uri" | "mimeType" | "sha256" | "bytes"> {
+  readonly mimeType: "model/step";
+}
+
+/** Server-assembly resolver for a current-process owned STEP artifact. */
+export type OwnedStepResolver = (
+  resource: OwnedStepResource,
+) => Promise<Uint8Array>;
+
+/** Parse `casys://build123d/artifacts/<lowercase-sha256>.step` or return undefined. */
+export function parseBuild123dStepArtifactUri(uri: string): string | undefined {
+  const suffix = ".step";
+  if (
+    typeof uri !== "string" ||
+    !uri.startsWith(BUILD123D_ARTIFACT_URI_PREFIX) ||
+    !uri.endsWith(suffix)
+  ) {
+    return undefined;
+  }
+  const sha256 = uri.slice(
+    BUILD123D_ARTIFACT_URI_PREFIX.length,
+    uri.length - suffix.length,
+  );
+  if (!SHA256_HEX.test(sha256)) return undefined;
+  if (`${BUILD123D_ARTIFACT_URI_PREFIX}${sha256}${suffix}` !== uri) {
+    return undefined;
+  }
+  return sha256;
+}
+
 /** One output identity returned by a successful build123d export execution. */
 export interface Build123dExportOutput {
   readonly format: Build123dArtifactFormat;
@@ -599,6 +635,79 @@ export class Build123dArtifactStore {
   /** Deliberately do not re-admit any on-disk object or receipt after restart. */
   async restore(): Promise<void> {
     await Promise.resolve();
+  }
+
+  /**
+   * Return a copy of current-process owned STEP bytes after rehash.
+   *
+   * Looks only at the private descriptor and object maps. A generic MCP
+   * resource, host path, or leftover disk object is invisible here.
+   */
+  async readOwnedStep(resource: OwnedStepResource): Promise<Uint8Array> {
+    if (resource.mimeType !== "model/step") {
+      throw new Build123dArtifactError(
+        "artifact.integrity_failed",
+        "Owned STEP resource mimeType must be model/step.",
+        "Pass the issued model/step artifact identity; do not convert formats.",
+      );
+    }
+    if (
+      typeof resource.sha256 !== "string" ||
+      !SHA256_HEX.test(resource.sha256) ||
+      !Number.isSafeInteger(resource.bytes) || resource.bytes < 1 ||
+      resource.bytes > BUILD123D_MAXIMUM_ARTIFACT_BYTES
+    ) {
+      throw new Build123dArtifactError(
+        "artifact.integrity_failed",
+        "Owned STEP resource identity is invalid.",
+        "Pass the exact uri, mimeType, sha256 and bytes issued by this process.",
+      );
+    }
+    const uriSha256 = parseBuild123dStepArtifactUri(resource.uri);
+    if (uriSha256 === undefined) {
+      throw new Build123dArtifactError(
+        "artifact.integrity_failed",
+        "Owned STEP resource URI is not a canonical current-process STEP artifact URI.",
+        "Use casys://build123d/artifacts/<sha256>.step exactly as returned by build123d_export.",
+      );
+    }
+    if (uriSha256 !== resource.sha256) {
+      throw new Build123dArtifactError(
+        "artifact.integrity_failed",
+        "Owned STEP resource sha256 does not match its canonical URI.",
+        "Pass the digest-bound URI and sha256 issued together by this process.",
+      );
+    }
+    const known = this.#descriptors.get(resource.uri);
+    if (!known || !this.#objects.has(resource.uri)) {
+      throw new Build123dArtifactError(
+        "artifact.integrity_failed",
+        "Owned STEP resource was not issued by this server process.",
+        "Run build123d_export in the current server process to create a resource.",
+      );
+    }
+    if (known.format !== "step" || known.mimeType !== "model/step") {
+      throw new Build123dArtifactError(
+        "artifact.integrity_failed",
+        "Owned resource is not an immutable current-process STEP artifact.",
+        "Observe only issued model/step resources; do not convert STL or GLB bytes.",
+      );
+    }
+    if (known.sha256 !== resource.sha256) {
+      throw new Build123dArtifactError(
+        "artifact.integrity_failed",
+        "Owned STEP resource sha256 does not match the issued artifact.",
+        "Pass the exact digest returned with the artifact URI.",
+      );
+    }
+    if (known.bytes !== resource.bytes) {
+      throw new Build123dArtifactError(
+        "artifact.integrity_failed",
+        "Owned STEP resource bytes do not match the issued artifact.",
+        "Pass the exact byte length returned with the artifact URI.",
+      );
+    }
+    return await this.readVerified(known);
   }
 
   /** Promote verified delivery bytes and issue resources in this process only. */

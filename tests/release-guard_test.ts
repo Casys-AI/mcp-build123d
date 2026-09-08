@@ -41,10 +41,27 @@ Deno.test("publish workflow retains tag-only qualified release guards", async ()
   const constraints = await Deno.readTextFile(
     new URL("../requirements/constraints.txt", import.meta.url),
   );
+  const readme = await Deno.readTextFile(
+    new URL("../README.md", import.meta.url),
+  );
   assertStringIncludes(workflow, "branches:");
   assertStringIncludes(workflow, "      - main");
   assertStringIncludes(workflow, "tags:");
   assertStringIncludes(workflow, '      - "v*"');
+  assertStringIncludes(
+    workflow,
+    [
+      "on:",
+      "  push:",
+      "    branches:",
+      "      - main",
+      "    tags:",
+      '      - "v*"',
+      "  pull_request:",
+      "    branches:",
+      "      - main",
+    ].join("\n"),
+  );
   assertStringIncludes(
     workflow,
     "github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')",
@@ -58,9 +75,37 @@ Deno.test("publish workflow retains tag-only qualified release guards", async ()
     "requirements/runtime.txt -c requirements/constraints.txt",
   );
   assertStringIncludes(constraints, "cadquery-ocp-novtk==7.9.3.1.1");
-  assertStringIncludes(workflow, "docker/build-push-action@v6");
   assertStringIncludes(workflow, "platforms: linux/amd64,linux/arm64");
   assertStringIncludes(workflow, "provenance: mode=max");
   assertStringIncludes(workflow, "sbom: true");
   assertStringIncludes(workflow, "deno test --allow-all tests/");
+  assertStringIncludes(
+    workflow,
+    "ref: b08802df353bb25d25a1c8d64b22ea61b5287ae0",
+  );
+  assertStringIncludes(workflow, "load: true");
+  assertStringIncludes(workflow, "push: false");
+  assertStringIncludes(workflow, "push: true");
+  assertEquals(workflow.includes("deno publish\n"), true);
+  assertEquals(/uses:\s+\S+@v\d/.test(workflow), false);
+  const uses = [...workflow.matchAll(/^\s+- uses:\s+(\S+)(.*)$/gm)];
+  assertEquals(uses.length > 0, true);
+  for (const [, actionRef, rest] of uses) {
+    const sha = actionRef.split("@")[1] ?? "";
+    assertEquals(/^[0-9a-f]{40}$/.test(sha), true, actionRef);
+    assertEquals(rest.trim().startsWith("# v"), true, `${actionRef}${rest}`);
+  }
+  assertStringIncludes(
+    workflow,
+    ["permissions:", "  contents: read"].join("\n"),
+  );
+  assertStringIncludes(workflow, "id-token: write");
+  assertStringIncludes(workflow, "packages: write");
+  assertStringIncludes(workflow, "attestations: write");
+  assertStringIncludes(readme, "wildcard CORS");
+  assertStringIncludes(readme, "no authentication");
+  assertEquals(/authenticated\s+reverse\s+proxy/.test(readme), true);
+  assertStringIncludes(readme, "non-loopback");
+  assertStringIncludes(readme, "not sandboxed");
+  assertEquals(/host or\s+container user/.test(readme), true);
 });

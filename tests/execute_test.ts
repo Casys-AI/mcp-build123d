@@ -862,3 +862,43 @@ Deno.test("CAD schemas, annotations and artifact result contract stay coherent",
     false,
   );
 });
+
+Deno.test(
+  "export name schema accepts 250 ASCII characters for STEP/STL/GLB and rejects 251",
+  () => {
+    const tools = createExecuteTools();
+    const exported = tools.find((tool) => tool.name === "build123d_export");
+    if (!exported) throw new Error("Missing export tool");
+    const nameSchema = (exported.inputSchema.properties as {
+      name: { maxLength: number };
+    }).name;
+    assertEquals(nameSchema.maxLength, 250);
+
+    const validator = new SchemaValidator();
+    validator.addSchema("build123d_export", exported.inputSchema);
+    const accepted = "a".repeat(250);
+    const rejected = "a".repeat(251);
+    for (const format of ["step", "stl", "gltf"] as const) {
+      assertEquals(
+        validator.validate("build123d_export", {
+          script: "result = 1",
+          formats: [format],
+          name: accepted,
+        }).valid,
+        true,
+      );
+      const extension = format === "gltf" ? "glb" : format;
+      assertEquals(`${accepted}.${extension}`.length <= 255, true);
+    }
+    assertEquals(`${accepted}.step`.length, 255);
+    assertEquals(
+      validator.validate("build123d_export", {
+        script: "result = 1",
+        formats: ["step"],
+        name: rejected,
+      }).valid,
+      false,
+    );
+    assertEquals(`${rejected}.step`.length > 255, true);
+  },
+);

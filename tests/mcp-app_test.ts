@@ -1,6 +1,7 @@
 /** Real HTTP wire coverage for the build123d MCP application. */
 
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { SchemaValidator } from "@casys/mcp-server";
 import { CadToolsClient } from "../src/client.ts";
 import {
   ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES,
@@ -660,6 +661,138 @@ Deno.test("wire schemas reject invalid requests without echoing host paths", asy
   }
 });
 
+Deno.test(
+  "wire schema rejects a 251-character export name before Python or staging",
+  async () => {
+    await withServerRoots(async ({ exportsDirectory, artifactsDirectory }) => {
+      const previousPython = Deno.env.get("BUILD123D_PYTHON_BIN");
+      const root = await Deno.makeTempDir({
+        prefix: "mcp-build123d-basename-limit-",
+      });
+      const interpreter = `${root}/python`;
+      const ran = `${root}/ran`;
+      await Deno.writeTextFile(
+        interpreter,
+        `#!/bin/sh\nprintf ran > ${shellQuote(ran)}\nexit 1\n`,
+        { mode: 0o700 },
+      );
+      Deno.env.set("BUILD123D_PYTHON_BIN", interpreter);
+      const assembly = testAssembly(exportsDirectory, artifactsDirectory);
+      const port = startOnFreePort();
+      const http = await assembly.app.startHttp({ port, onListen: () => {} });
+      try {
+        const response = await mcpRpc(port, "tools/call", {
+          name: "build123d_export",
+          arguments: {
+            script: "result = 1",
+            formats: ["step"],
+            name: "a".repeat(251),
+          },
+        });
+        const result = response.body.result as {
+          isError: boolean;
+          structuredContent: Record<string, unknown>;
+        };
+        assertEquals(result.isError, true);
+        assertEquals(
+          result.structuredContent.code,
+          "request.invalid_arguments",
+        );
+        assertEquals(
+          Array.from(Deno.readDirSync(exportsDirectory)).map((entry) =>
+            entry.name
+          ),
+          [],
+        );
+        await assertRejects(() => Deno.stat(ran), Deno.errors.NotFound);
+      } finally {
+        await http.shutdown();
+        if (previousPython === undefined) {
+          Deno.env.delete("BUILD123D_PYTHON_BIN");
+        } else {
+          Deno.env.set("BUILD123D_PYTHON_BIN", previousPython);
+        }
+        await Deno.remove(root, { recursive: true });
+      }
+    });
+  },
+);
+
+Deno.test(
+  "wire accepts 250 emoji in schema then rejects the sanitized basename before Python or staging",
+  async () => {
+    await withServerRoots(async ({ exportsDirectory, artifactsDirectory }) => {
+      const previousPython = Deno.env.get("BUILD123D_PYTHON_BIN");
+      const root = await Deno.makeTempDir({
+        prefix: "mcp-build123d-basename-emoji-",
+      });
+      const interpreter = `${root}/python`;
+      const ran = `${root}/ran`;
+      await Deno.writeTextFile(
+        interpreter,
+        `#!/bin/sh\nprintf ran > ${shellQuote(ran)}\nexit 1\n`,
+        { mode: 0o700 },
+      );
+      Deno.env.set("BUILD123D_PYTHON_BIN", interpreter);
+      const assembly = testAssembly(exportsDirectory, artifactsDirectory);
+      const exported = assembly.toolsClient.toMCPFormat().find((tool) =>
+        tool.name === "build123d_export"
+      );
+      if (!exported) throw new Error("Missing export tool");
+      const validator = new SchemaValidator();
+      validator.addSchema("build123d_export", exported.inputSchema);
+      const emojiName = "😀".repeat(250);
+      assertEquals([...emojiName].length, 250);
+      assertEquals(emojiName.length, 500);
+      assertEquals(
+        validator.validate("build123d_export", {
+          script: "result = 1",
+          formats: ["step"],
+          name: emojiName,
+        }).valid,
+        true,
+      );
+      const port = startOnFreePort();
+      const http = await assembly.app.startHttp({ port, onListen: () => {} });
+      try {
+        const response = await mcpRpc(port, "tools/call", {
+          name: "build123d_export",
+          arguments: {
+            script: "result = 1",
+            formats: ["step"],
+            name: emojiName,
+          },
+        });
+        const result = response.body.result as {
+          isError: boolean;
+          structuredContent: Record<string, unknown>;
+        };
+        assertEquals(result.isError, true);
+        assertEquals(
+          result.structuredContent.code,
+          "request.invalid_arguments",
+        );
+        assertEquals(result.structuredContent.retryable, false);
+        assertEquals(
+          Array.from(Deno.readDirSync(exportsDirectory)).map((entry) =>
+            entry.name
+          ),
+          [],
+        );
+        await assertRejects(() => Deno.stat(ran), Deno.errors.NotFound);
+      } finally {
+        await http.shutdown();
+        if (previousPython === undefined) {
+          Deno.env.delete("BUILD123D_PYTHON_BIN");
+        } else {
+          Deno.env.set("BUILD123D_PYTHON_BIN", previousPython);
+        }
+        await Deno.remove(root, { recursive: true });
+      }
+    });
+  },
+);
+
 Deno.test("the result viewer is the only registered viewer and loads from its published path", async () => {
   const seen: string[] = [];
   const remote = Deno.serve(
@@ -766,6 +899,72 @@ Deno.test("assembly-integrity accepts a legal-size inline envelope through the H
       },
     });
     assertEquals(response.status === 413, false);
+    const result = response.body.result as {
+      isError: boolean;
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(result.isError, true);
+    assertEquals(
+      result.structuredContent.code,
+      "assembly_integrity.input_invalid",
+    );
+    assertEquals(result.structuredContent.retryable, false);
+  } finally {
+    await http.shutdown();
+  }
+});
+
+Deno.test("assembly-integrity HTTP schema rejects both inline and resource forms together", async () => {
+  const assembly = testAssembly();
+  const port = startOnFreePort();
+  const http = await assembly.app.startHttp({ port, onListen: () => {} });
+  try {
+    const sha256 = "0".repeat(64);
+    const response = await mcpRpc(port, "tools/call", {
+      name: "build123d_observe_assembly_integrity",
+      arguments: {
+        step: {
+          mimeType: "model/step",
+          sha256,
+          bytes: 1,
+          blob: "QQ==",
+        },
+        stepResource: {
+          uri: `casys://build123d/artifacts/${sha256}.step`,
+          mimeType: "model/step",
+          sha256,
+          bytes: 1,
+        },
+      },
+    });
+    const result = response.body.result as {
+      isError: boolean;
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(result.isError, true);
+    assertEquals(result.structuredContent.code, "request.invalid_arguments");
+  } finally {
+    await http.shutdown();
+  }
+});
+
+Deno.test("assembly-integrity HTTP resource form rejects an unknown current-process URI", async () => {
+  const assembly = testAssembly();
+  const port = startOnFreePort();
+  const http = await assembly.app.startHttp({ port, onListen: () => {} });
+  try {
+    const sha256 = "0".repeat(64);
+    const response = await mcpRpc(port, "tools/call", {
+      name: "build123d_observe_assembly_integrity",
+      arguments: {
+        stepResource: {
+          uri: `casys://build123d/artifacts/${sha256}.step`,
+          mimeType: "model/step",
+          sha256,
+          bytes: 1,
+        },
+      },
+    });
     const result = response.body.result as {
       isError: boolean;
       structuredContent: Record<string, unknown>;

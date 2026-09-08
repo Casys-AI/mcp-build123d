@@ -40,6 +40,19 @@ function exportDir(): string {
 }
 
 const MAXIMUM_EXECUTION_TIMEOUT_MS = 60_000;
+const POSIX_NAME_MAX_BYTES = 255;
+
+const EXTENSIONS: Record<ExportSpec["format"], string> = {
+  step: "step",
+  stl: "stl",
+  gltf: "glb",
+};
+
+/** Global basename cap covering the longest imposed extension (`.step`). */
+const MAXIMUM_EXPORT_BASENAME_LENGTH = POSIX_NAME_MAX_BYTES -
+  Math.max(
+    ...Object.values(EXTENSIONS).map((extension) => `.${extension}`.length),
+  );
 
 function executionTimeoutMs(value: unknown): number | undefined {
   if (value === undefined) return undefined;
@@ -72,11 +85,16 @@ function sanitizeBasename(name: string): string {
   return safe;
 }
 
-const EXTENSIONS: Record<ExportSpec["format"], string> = {
-  step: "step",
-  stl: "stl",
-  gltf: "glb",
-};
+/** Sanitized basename exceeded the POSIX-backed character bound. */
+export class ExportBasenameLengthError extends Error {
+  constructor(sanitizedLength: number) {
+    super(
+      "[build123d_export] Sanitized file name length " +
+        `${sanitizedLength} exceeds ${MAXIMUM_EXPORT_BASENAME_LENGTH} characters.`,
+    );
+    this.name = "ExportBasenameLengthError";
+  }
+}
 
 /** Promotes one mutable delivery export into a server-owned artifact resource. */
 export interface ExportArtifactPublisher {
@@ -354,10 +372,14 @@ export function createExecuteTools(
           name: {
             type: "string",
             minLength: 1,
-            maxLength: 251,
+            maxLength: MAXIMUM_EXPORT_BASENAME_LENGTH,
             description:
               "Base file name without extension (e.g. 'bracket'). Directory " +
-              "components are stripped.",
+              "components are stripped. JSON Schema maxLength is 250 Unicode " +
+              "code points; after the existing safe-character mapping the " +
+              "basename must still be at most 250 characters so the longest " +
+              "imposed extension ('.step') stays within 255 POSIX NAME_MAX " +
+              "bytes. Schema alone does not bound UTF-16 expansion.",
           },
           density_kg_m3: {
             type: "number",
@@ -389,6 +411,9 @@ export function createExecuteTools(
         const script = args.script as string;
         const formats = args.formats as ExportSpec["format"][];
         const basename = sanitizeBasename(args.name as string);
+        if (basename.length > MAXIMUM_EXPORT_BASENAME_LENGTH) {
+          throw new ExportBasenameLengthError(basename.length);
+        }
         // Keep an injected application root coupled to the publisher. The
         // direct-library fallback remains environment-configurable for callers
         // that assemble their own publisher.

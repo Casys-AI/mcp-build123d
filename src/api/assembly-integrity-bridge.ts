@@ -8,6 +8,13 @@
  */
 
 import { join } from "@std/path";
+import {
+  BUILD123D_MAXIMUM_ARTIFACT_BYTES,
+  Build123dArtifactError,
+  type OwnedStepResolver,
+  type OwnedStepResource,
+  parseBuild123dStepArtifactUri,
+} from "../artifacts.ts";
 import { ASSEMBLY_INTEGRITY_HARNESS_SOURCE } from "./assembly-integrity-harness-source.ts";
 import {
   collectBoundedChildOutput,
@@ -80,8 +87,17 @@ export interface AssemblyIntegrityProducer {
   readonly engine: typeof ASSEMBLY_INTEGRITY_PRODUCER.engine;
 }
 
-export interface AssemblyIntegrityObservationInput {
-  readonly step: AssemblyIntegrityInputArtifact & { readonly blob: string };
+export type AssemblyIntegrityStepResource = OwnedStepResource;
+
+export type AssemblyIntegrityObservationInput =
+  | {
+    readonly step: AssemblyIntegrityInputArtifact & { readonly blob: string };
+  }
+  | { readonly stepResource: AssemblyIntegrityStepResource };
+
+/** Server-assembly dependencies. Never accepted as MCP tool input. */
+export interface ObserveAssemblyIntegrityDependencies {
+  readonly resolveOwnedStep?: OwnedStepResolver;
 }
 
 export type AssemblyIntegrityFact<T> =
@@ -171,8 +187,12 @@ export class AssemblyIntegrityObservationError extends Error {
  */
 export async function observeAssemblyIntegrity(
   value: unknown,
+  dependencies: ObserveAssemblyIntegrityDependencies = {},
 ): Promise<AssemblyIntegrityObservation> {
-  const input = await parseObservationInput(value);
+  const input = await parseObservationInput(
+    value,
+    dependencies.resolveOwnedStep,
+  );
   const temporaryDirectory = await Deno.makeTempDir({
     prefix: "build123d-assembly-integrity-",
   });
@@ -196,49 +216,143 @@ interface ParsedInput {
   readonly bytes: Uint8Array;
 }
 
-async function parseObservationInput(value: unknown): Promise<ParsedInput> {
-  const root = exactInputRecord(value, ["step"], "$input");
+async function parseObservationInput(
+  value: unknown,
+  resolveOwnedStep?: OwnedStepResolver,
+): Promise<ParsedInput> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new AssemblyIntegrityInputError("$input must be an object.");
+  }
+  const root = value as Record<string, unknown>;
+  const hasStep = Object.hasOwn(root, "step");
+  const hasResource = Object.hasOwn(root, "stepResource");
+  if (Object.keys(root).length !== 1 || hasStep === hasResource) {
+    throw new AssemblyIntegrityInputError("$input has an unsupported shape.");
+  }
+  if (hasStep) return await parseInlineStep(root.step);
+  return await parseOwnedStepResource(root.stepResource, resolveOwnedStep);
+}
+
+async function parseInlineStep(value: unknown): Promise<ParsedInput> {
   const step = exactInputRecord(
-    root.step,
+    value,
     ["mimeType", "sha256", "bytes", "blob"],
     "$input.step",
   );
-  if (step.mimeType !== STEP_MIME_TYPE) {
-    throw new AssemblyIntegrityInputError(
-      "$input.step.mimeType must be model/step.",
-    );
-  }
-  if (typeof step.sha256 !== "string" || !SHA256_HEX.test(step.sha256)) {
-    throw new AssemblyIntegrityInputError(
-      "$input.step.sha256 must be lowercase SHA-256.",
-    );
-  }
-  if (
-    !isPositiveSafeInteger(step.bytes) ||
-    step.bytes > ASSEMBLY_INTEGRITY_MAXIMUM_STEP_BYTES
-  ) {
-    throw new AssemblyIntegrityInputError(
-      `$input.step.bytes must be a positive integer at most ${ASSEMBLY_INTEGRITY_MAXIMUM_STEP_BYTES}.`,
-    );
-  }
+  const claimed = parseClaimedStepIdentity(step, "$input.step", {
+    maximumBytes: ASSEMBLY_INTEGRITY_MAXIMUM_STEP_BYTES,
+  });
   if (typeof step.blob !== "string" || step.blob.length === 0) {
     throw new AssemblyIntegrityInputError(
       "$input.step.blob must be canonical padded base64.",
     );
   }
   const bytes = decodeCanonicalBase64(step.blob);
-  if (bytes.byteLength !== step.bytes) {
+  return await verifiedParsedStep(bytes, claimed, "$input.step");
+}
+
+async function parseOwnedStepResource(
+  value: unknown,
+  resolveOwnedStep?: OwnedStepResolver,
+): Promise<ParsedInput> {
+  const resource = exactInputRecord(
+    value,
+    ["uri", "mimeType", "sha256", "bytes"],
+    "$input.stepResource",
+  );
+  const claimed = parseClaimedStepIdentity(resource, "$input.stepResource", {
+    maximumBytes: BUILD123D_MAXIMUM_ARTIFACT_BYTES,
+  });
+  if (typeof resource.uri !== "string") {
     throw new AssemblyIntegrityInputError(
-      "$input.step.bytes does not equal decoded blob length.",
+      "$input.stepResource.uri must be a canonical STEP artifact URI.",
+    );
+  }
+  const uriSha256 = parseBuild123dStepArtifactUri(resource.uri);
+  if (uriSha256 === undefined) {
+    throw new AssemblyIntegrityInputError(
+      "$input.stepResource.uri is not a canonical current-process STEP artifact URI.",
+    );
+  }
+  if (uriSha256 !== claimed.sha256) {
+    throw new AssemblyIntegrityInputError(
+      "$input.stepResource.sha256 does not match its canonical URI.",
+    );
+  }
+  if (!resolveOwnedStep) {
+    throw new AssemblyIntegrityInputError(
+      "$input.stepResource was not issued by this server process.",
+    );
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = await resolveOwnedStep({
+      uri: resource.uri,
+      mimeType: STEP_MIME_TYPE,
+      sha256: claimed.sha256,
+      bytes: claimed.bytes,
+    });
+  } catch (error) {
+    if (error instanceof AssemblyIntegrityInputError) throw error;
+    if (error instanceof Build123dArtifactError) {
+      throw new AssemblyIntegrityInputError(
+        `$input.stepResource: ${error.message}`,
+      );
+    }
+    throw new AssemblyIntegrityInputError(
+      "$input.stepResource was not issued by this server process.",
+    );
+  }
+  return await verifiedParsedStep(bytes, claimed, "$input.stepResource");
+}
+
+function parseClaimedStepIdentity(
+  value: Record<string, unknown>,
+  path: string,
+  bounds: { readonly maximumBytes: number },
+): AssemblyIntegrityInputArtifact {
+  if (value.mimeType !== STEP_MIME_TYPE) {
+    throw new AssemblyIntegrityInputError(
+      `${path}.mimeType must be model/step.`,
+    );
+  }
+  if (typeof value.sha256 !== "string" || !SHA256_HEX.test(value.sha256)) {
+    throw new AssemblyIntegrityInputError(
+      `${path}.sha256 must be lowercase SHA-256.`,
+    );
+  }
+  if (
+    !isPositiveSafeInteger(value.bytes) ||
+    value.bytes > bounds.maximumBytes
+  ) {
+    throw new AssemblyIntegrityInputError(
+      `${path}.bytes must be a positive integer at most ${bounds.maximumBytes}.`,
+    );
+  }
+  return {
+    mimeType: STEP_MIME_TYPE,
+    sha256: value.sha256,
+    bytes: value.bytes,
+  };
+}
+
+async function verifiedParsedStep(
+  bytes: Uint8Array,
+  claimed: AssemblyIntegrityInputArtifact,
+  path: string,
+): Promise<ParsedInput> {
+  if (bytes.byteLength !== claimed.bytes) {
+    throw new AssemblyIntegrityInputError(
+      `${path}.bytes does not equal verified STEP length.`,
     );
   }
   const sha256 = await sha256Hex(bytes);
-  if (sha256 !== step.sha256) {
+  if (sha256 !== claimed.sha256) {
     throw new AssemblyIntegrityInputError(
-      "$input.step.sha256 does not equal decoded blob bytes.",
+      `${path}.sha256 does not equal verified STEP bytes.`,
     );
   }
-  validatePart21(bytes);
+  validatePart21(bytes, path);
   return {
     artifact: { mimeType: STEP_MIME_TYPE, sha256, bytes: bytes.byteLength },
     bytes,
@@ -246,6 +360,11 @@ async function parseObservationInput(value: unknown): Promise<ParsedInput> {
 }
 
 function decodeCanonicalBase64(value: string): Uint8Array {
+  if (value.length > ASSEMBLY_INTEGRITY_MAXIMUM_BASE64_CHARACTERS) {
+    throw new AssemblyIntegrityInputError(
+      "$input.step.blob exceeds the inline STEP bound.",
+    );
+  }
   if (
     value.length % 4 !== 0 ||
     !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
@@ -273,13 +392,14 @@ function decodeCanonicalBase64(value: string): Uint8Array {
   return bytes;
 }
 
-function validatePart21(bytes: Uint8Array): void {
+function validatePart21(bytes: Uint8Array, path: string): void {
+  const source = path === "$input.step" ? `${path}.blob` : path;
   let text: string;
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
     throw new AssemblyIntegrityInputError(
-      "$input.step.blob must be UTF-8 STEP Part 21 bytes.",
+      `${source} must be UTF-8 STEP Part 21 bytes.`,
     );
   }
   if (
@@ -289,7 +409,7 @@ function validatePart21(bytes: Uint8Array): void {
     !/\bHEADER;[\s\S]*?ENDSEC;[\s\S]*?\bDATA;[\s\S]*?ENDSEC;/.test(text)
   ) {
     throw new AssemblyIntegrityInputError(
-      "$input.step.blob must contain one complete STEP Part 21 exchange.",
+      `${source} must contain one complete STEP Part 21 exchange.`,
     );
   }
 }
