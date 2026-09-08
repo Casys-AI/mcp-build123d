@@ -121,12 +121,12 @@ For example, a checkout-backed stdio entry is:
 
 ### Run the published package
 
-The published JSR package `0.6.2` can be started directly; Python and build123d
+The published JSR package `0.6.3` can be started directly; Python and build123d
 are still host dependencies:
 
 ```bash
 BUILD123D_PYTHON_BIN="$PWD/.venv/bin/python" \
-  deno run -A jsr:@casys/mcp-build123d@0.6.2/server --port=3014
+  deno run -A jsr:@casys/mcp-build123d@0.6.3/server --port=3014
 ```
 
 `-A` is intentional here: the public tools run arbitrary Python and write
@@ -148,22 +148,23 @@ file location depends on the host; the connection entry is typically:
 ```
 
 HTTP binds to `127.0.0.1` by default; `--hostname=0.0.0.0` is an explicit
-network exposure. The `0.6.2` checkout supports native stdio and the
+network exposure. The `0.6.3` checkout supports native stdio and the
 digest-bound resource contract described below.
 
 ### Run the published provider image
 
-The dedicated image includes the qualified Python/CAD pair and Deno runtime. Use
-the immutable digest published for this release (the repository README is pinned
-after image publication); do not substitute the historical broader
+The dedicated image includes the qualified Python/CAD pair and Deno runtime. Set
+`MCP_BUILD123D_IMAGE_DIGEST` to the exact `sha256:` digest in the GitHub Release
+notes for the version you select. Do not substitute the historical broader
 `engineering-toolchain` image, which is a different server release.
 
 ```bash
 mkdir -p "$PWD/cad-exports"
+: "${MCP_BUILD123D_IMAGE_DIGEST:?Set this to the exact sha256 digest in the GitHub Release notes}"
 docker run --rm \
   --publish 127.0.0.1:3014:3014 \
   --volume "$PWD/cad-exports:/exports" \
-  ghcr.io/casys-ai/mcp-build123d@sha256:765d73ca6a15b6112d3693a298514ae4ff1a8ce85485cf5cf4074b41c218142d
+  "ghcr.io/casys-ai/mcp-build123d@${MCP_BUILD123D_IMAGE_DIGEST}"
 ```
 
 ### Build a checkout locally
@@ -394,7 +395,7 @@ exact input identity, fixed method, and a closed producer block:
 {
   "producer": {
     "service": "mcp-build123d",
-    "packageVersion": "0.6.2",
+    "packageVersion": "0.6.3",
     "tool": "build123d_observe_assembly_integrity",
     "engine": { "name": "cadquery-ocp", "version": "7.9.3.1" }
   }
