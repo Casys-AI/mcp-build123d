@@ -683,7 +683,7 @@ Deno.test("Build123d declares a whole-view session resource without mandatory co
     app: {
       id: "io.casys.mcp-build123d.results",
       title: "Build123d geometry",
-      version: "0.6.2",
+      version: "0.6.3",
     },
     resources: [{
       uri: "ui://mcp-build123d/results-viewer",

@@ -2,7 +2,7 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
-## [Unreleased]
+## [0.6.3] - 2026-09-08
 
 - **Owned STEP assembly observation.** `build123d_observe_assembly_integrity`
   accepts either the existing inline digest-bound STEP or a closed
