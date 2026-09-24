@@ -90,7 +90,7 @@ published JSR package on first run:
   "mcpServers": {
     "build123d": {
       "command": "deno",
-      "args": ["run", "-A", "jsr:@casys/mcp-build123d@0.6.4/server", "--stdio"],
+      "args": ["run", "-A", "jsr:@casys/mcp-build123d@0.7.0/server", "--stdio"],
       "env": {
         "BUILD123D_PYTHON_BIN": "/absolute/path/to/qualified/python",
         "BUILD123D_EXPORT_DIR": "/absolute/path/to/private/cad-exports"
@@ -169,12 +169,12 @@ For example, a checkout-backed stdio entry is:
 
 ### Run the published package
 
-The published JSR package `0.6.4` can be started directly; Python and build123d
+The published JSR package `0.7.0` can be started directly; Python and build123d
 are still host dependencies:
 
 ```bash
 BUILD123D_PYTHON_BIN="/absolute/path/to/qualified/python" \
-  deno run -A jsr:@casys/mcp-build123d@0.6.4/server --port=3014
+  deno run -A jsr:@casys/mcp-build123d@0.7.0/server --port=3014
 ```
 
 `-A` is intentional here: the public tools run arbitrary Python and write
@@ -196,7 +196,7 @@ file location depends on the host; the connection entry is typically:
 ```
 
 HTTP binds to `127.0.0.1` by default; `--hostname=0.0.0.0` is an explicit
-network exposure. The `0.6.4` checkout supports native stdio and the
+network exposure. The `0.7.0` checkout supports native stdio and the
 digest-bound resource contract described below.
 
 ### Run the published provider image
@@ -467,7 +467,7 @@ exact input identity, fixed method, and a closed producer block:
 {
   "producer": {
     "service": "mcp-build123d",
-    "packageVersion": "0.6.4",
+    "packageVersion": "0.7.0",
     "tool": "build123d_observe_assembly_integrity",
     "engine": { "name": "cadquery-ocp", "version": "7.9.3.1" }
   }

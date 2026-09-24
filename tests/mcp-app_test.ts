@@ -337,7 +337,7 @@ Deno.test("HTTP discover and tools/list expose instructions, annotations and sta
     assertEquals(discover.status, 200);
     assertEquals(
       (discover.body.result as { serverInfo: unknown }).serverInfo,
-      { name: "mcp-build123d", version: "0.6.4" },
+      { name: "mcp-build123d", version: "0.7.0" },
     );
     assertStringIncludes(
       (discover.body.result as { instructions: string }).instructions,
@@ -881,7 +881,7 @@ Deno.test("the three published viewers load from their package paths", async () 
   try {
     const assembly = createCadMcpApp({
       viewerModuleUrl:
-        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.6.4/server.ts`,
+        `http://127.0.0.1:${port}/@casys/mcp-build123d/0.7.0/server.ts`,
     });
     assertEquals(assembly.viewers, {
       registered: ["results-viewer", "assembly-viewer", "drawing-viewer"],
@@ -900,9 +900,9 @@ Deno.test("the three published viewers load from their package paths", async () 
       );
     }
     assertEquals(seen, [
-      "/@casys/mcp-build123d/0.6.4/src/ui/dist/results-viewer/index.html",
-      "/@casys/mcp-build123d/0.6.4/src/ui/dist/assembly-viewer/index.html",
-      "/@casys/mcp-build123d/0.6.4/src/ui/dist/drawing-viewer/index.html",
+      "/@casys/mcp-build123d/0.7.0/src/ui/dist/results-viewer/index.html",
+      "/@casys/mcp-build123d/0.7.0/src/ui/dist/assembly-viewer/index.html",
+      "/@casys/mcp-build123d/0.7.0/src/ui/dist/drawing-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();

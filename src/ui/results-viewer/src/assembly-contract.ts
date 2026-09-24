@@ -58,10 +58,20 @@ export interface AssemblyIntegrityTopology {
   readonly freeEdgeCount: AssemblyIntegrityFact<number>;
 }
 
+export interface AssemblyIntegrityProducer {
+  readonly service: "mcp-build123d";
+  readonly packageVersion: string;
+  readonly tool: "build123d_observe_assembly_integrity";
+  readonly engine: {
+    readonly name: "cadquery-ocp";
+    readonly version: "7.9.3.1";
+  };
+}
+
 export interface AssemblyIntegrityObservation {
   readonly schemaVersion: "build123d-assembly-integrity-observation/1.0";
   readonly kind: "assembly-integrity-observation";
-  readonly producer: typeof PRODUCER;
+  readonly producer: AssemblyIntegrityProducer;
   readonly inputArtifact: AssemblyIntegrityInputArtifact;
   readonly method: typeof METHOD;
   readonly importability: AssemblyIntegrityFact<"imported" | "failed">;
@@ -89,13 +99,14 @@ const PRODUCER = {
   tool: "build123d_observe_assembly_integrity",
   engine: { name: "cadquery-ocp", version: "7.9.3.1" },
 } as const;
+const EARLIEST_COMPATIBLE_PRODUCER_VERSION = "0.6.3";
 const MAX_STEP_BYTES = 128 * 1_024 * 1_024;
 const MAX_OCCURRENCES = 32;
 const MAX_PAIRS = 496;
 const SHA256 = /^[a-f0-9]{64}$/;
 const LABEL = /^[\x21-\x7e]{1,255}$/;
 
-/** Accept only the current provider's exact, internally coherent observation. */
+/** Accept exact v1 observations produced from 0.6.3 through this package. */
 export function parseAssemblyObservation(
   value: unknown,
 ): ParseAssemblyObservation {
@@ -128,7 +139,7 @@ function parseObservation(value: unknown): AssemblyIntegrityObservation {
   if (root.kind !== "assembly-integrity-observation") {
     fail("Unsupported observation kind");
   }
-  parseProducer(root.producer);
+  const producer = parseProducer(root.producer);
   const inputArtifact = parseInputArtifact(root.inputArtifact);
   parseMethod(root.method);
   const importability = parseFact(
@@ -162,7 +173,7 @@ function parseObservation(value: unknown): AssemblyIntegrityObservation {
   return {
     schemaVersion: SCHEMA,
     kind: "assembly-integrity-observation",
-    producer: PRODUCER,
+    producer,
     inputArtifact,
     method: METHOD,
     importability,
@@ -173,7 +184,7 @@ function parseObservation(value: unknown): AssemblyIntegrityObservation {
   };
 }
 
-function parseProducer(value: unknown): void {
+function parseProducer(value: unknown): AssemblyIntegrityProducer {
   const producer = exactRecord(
     value,
     ["service", "packageVersion", "tool", "engine"],
@@ -186,11 +197,45 @@ function parseProducer(value: unknown): void {
   );
   if (
     producer.service !== PRODUCER.service ||
-    producer.packageVersion !== PRODUCER.packageVersion ||
+    !compatibleProducerVersion(producer.packageVersion) ||
     producer.tool !== PRODUCER.tool ||
     engine.name !== PRODUCER.engine.name ||
     engine.version !== PRODUCER.engine.version
   ) fail("Unsupported assembly observation producer");
+  return {
+    service: PRODUCER.service,
+    packageVersion: producer.packageVersion as string,
+    tool: PRODUCER.tool,
+    engine: PRODUCER.engine,
+  };
+}
+
+function compatibleProducerVersion(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const parsed = semanticVersion(value);
+  const earliest = semanticVersion(EARLIEST_COMPATIBLE_PRODUCER_VERSION)!;
+  const current = semanticVersion(MCP_BUILD123D_VERSION)!;
+  return parsed !== undefined && compareVersions(parsed, earliest) >= 0 &&
+    compareVersions(parsed, current) <= 0;
+}
+
+function semanticVersion(
+  value: string,
+): readonly [number, number, number] | undefined {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
+  if (!match) return undefined;
+  const version = match.slice(1).map(Number) as [number, number, number];
+  return version.every(Number.isSafeInteger) ? version : undefined;
+}
+
+function compareVersions(
+  left: readonly [number, number, number],
+  right: readonly [number, number, number],
+): number {
+  for (let index = 0; index < left.length; index++) {
+    if (left[index]! !== right[index]!) return left[index]! - right[index]!;
+  }
+  return 0;
 }
 
 function parseInputArtifact(value: unknown): AssemblyIntegrityInputArtifact {

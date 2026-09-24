@@ -2,7 +2,7 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
-## [Unreleased]
+## [0.7.0] - 2026-09-24
 
 - **MCP Platform package name.** Direct framework imports now use the canonical
   `@casys/mcp-platform@0.28.1` package and the viewer rebuild workflow checks
@@ -31,6 +31,9 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
   presentation names, so occurrence pairs lead with readable component names
   while exact STEP labels remain available as technical identities. UUID- or
   digest-only results without that metadata receive stable localized aliases.
+- **Historical assembly provenance.** The assembly viewer accepts compatible v1
+  observations produced from version 0.6.3 through the running package version
+  and keeps the recorded producer version unchanged.
 
 ## [0.6.4] - 2026-09-24
 

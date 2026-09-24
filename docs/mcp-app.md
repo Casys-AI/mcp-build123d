@@ -74,6 +74,11 @@ metadata when that map is bound to the same STEP SHA-256. This metadata changes
 only the names shown; pair joins and observation facts continue to use the exact
 STEP labels.
 
+The v1 viewer accepts schema-compatible observations produced from package
+version 0.6.3 through its own version and preserves the literal producer version
+as provenance. The live tool output schema remains pinned to the running package
+version.
+
 ## 2D inspection projection results
 
 `build123d_project_2d` is bound to the drawing viewer. Its

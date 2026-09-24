@@ -687,7 +687,7 @@ Deno.test("Build123d declares three whole-view resources and geometry session co
     app: {
       id: "io.casys.mcp-build123d.results",
       title: "Build123d inspection",
-      version: "0.6.4",
+      version: "0.7.0",
     },
     resources: [
       {

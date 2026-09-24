@@ -417,6 +417,23 @@ Deno.test("assembly viewer presents verified names while preserving opaque STEP 
   assertEquals(pair?.contact, { status: "observed", value: "contact" });
 });
 
+Deno.test("assembly viewer preserves compatible historical producer provenance", () => {
+  const historical = observation();
+  nested(historical, "producer").packageVersion = "0.6.3";
+  const state = assemblyStateFromToolResult({ structuredContent: historical });
+  assertEquals(state.kind, "result");
+  if (state.kind === "result") {
+    assertEquals(state.result.observation.producer.packageVersion, "0.6.3");
+  }
+
+  const future = observation();
+  nested(future, "producer").packageVersion = "99.0.0";
+  assertEquals(
+    assemblyStateFromToolResult({ structuredContent: future }).kind,
+    "error",
+  );
+});
+
 Deno.test("assembly viewer uses localized aliases when opaque names are unavailable", () => {
   const first = "22afa6fa-829b-4372-b126-6bbbeefd1a51";
   const second = "56a97aee-becf-4645-8e76-3bb3406e3cdc";
