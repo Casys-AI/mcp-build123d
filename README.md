@@ -97,6 +97,13 @@ published JSR package on first run:
 }
 ```
 
+During the first 24 hours after a package version is published, Deno may reject
+it under its minimum dependency age rule. If that happens, add
+`"--minimum-dependency-age=0"` immediately after `"run"` in `args` until the
+version is old enough, then remove it. The same option works in the HTTP command
+below. It temporarily disables Deno's age check for that invocation; keep the
+exact package version pin.
+
 The server checks those versions at startup and refuses a different pair. The
 Python probe uses `-I`, so packages available only through `PYTHONPATH` or the
 user site are not sufficient. If your client cannot find `deno`, set `command`
