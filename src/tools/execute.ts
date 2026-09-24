@@ -39,6 +39,27 @@ function exportDir(): string {
   return Deno.env.get("BUILD123D_EXPORT_DIR") ?? `${Deno.cwd()}/cad-exports`;
 }
 
+async function createExportStagingDirectory(root: string): Promise<string> {
+  try {
+    await Deno.mkdir(root, { recursive: true });
+    return await Deno.makeTempDir({
+      dir: await Deno.realPath(root),
+      prefix: ".build123d-export-",
+    });
+  } catch (error) {
+    console.error(
+      `[mcp-build123d] delivery staging creation: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    throw new Build123dArtifactError(
+      "artifact.store_unavailable",
+      "Managed export delivery staging is unavailable.",
+      "Fix BUILD123D_EXPORT_DIR permissions, then run build123d_export again.",
+    );
+  }
+}
+
 const MAXIMUM_EXECUTION_TIMEOUT_MS = 60_000;
 const POSIX_NAME_MAX_BYTES = 255;
 
@@ -417,48 +438,47 @@ export function createExecuteTools(
         // Keep an injected application root coupled to the publisher. The
         // direct-library fallback remains environment-configurable for callers
         // that assemble their own publisher.
-        const dir = options.exportDirectory ?? exportDir();
-        try {
-          await Deno.mkdir(dir, { recursive: true });
-        } catch (error) {
-          console.error(
-            `[mcp-build123d] delivery staging creation: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-          throw new Build123dArtifactError(
-            "artifact.store_unavailable",
-            "Managed export delivery staging is unavailable.",
-            "Fix BUILD123D_EXPORT_DIR permissions, then run build123d_export again.",
-          );
-        }
-
-        const exports: ExportSpec[] = formats.map((format) => ({
-          format,
-          path: `${dir}/${basename}.${EXTENSIONS[format]}`,
-        }));
-
-        const densityKgM3 = args.density_kg_m3 as number | undefined;
-        const result = await runCadScript(script, {
-          densityKgM3,
-          timeoutMs,
-          exports,
-        });
-
-        const execution = await createBuild123dExportExecution({
-          script,
-          formats,
-          name: args.name as string,
-          densityKgM3,
-          timeoutMs,
-          metrics: result.metrics,
-          exports: result.exports,
-        });
-        const artifacts = await artifactPublisher.publishExports(
-          result.exports,
-          execution,
+        const stagingDirectory = await createExportStagingDirectory(
+          options.exportDirectory ?? exportDir(),
         );
-        return geometryToolResult("export", result.metrics, artifacts);
+        try {
+          const exports: ExportSpec[] = formats.map((format) => ({
+            format,
+            path: `${stagingDirectory}/${basename}.${EXTENSIONS[format]}`,
+          }));
+
+          const densityKgM3 = args.density_kg_m3 as number | undefined;
+          const result = await runCadScript(script, {
+            densityKgM3,
+            timeoutMs,
+            exports,
+          });
+
+          const execution = await createBuild123dExportExecution({
+            script,
+            formats,
+            name: args.name as string,
+            densityKgM3,
+            timeoutMs,
+            metrics: result.metrics,
+            exports: result.exports,
+          });
+          const artifacts = await artifactPublisher.publishExports(
+            result.exports,
+            execution,
+          );
+          return geometryToolResult("export", result.metrics, artifacts);
+        } finally {
+          try {
+            await Deno.remove(stagingDirectory, { recursive: true });
+          } catch (error) {
+            console.error(
+              `[mcp-build123d] delivery staging cleanup: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
+        }
       },
     },
   ];

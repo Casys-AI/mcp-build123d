@@ -25,6 +25,7 @@ import json
 import os
 import sys
 import traceback
+from contextlib import redirect_stdout
 
 # Reproducibility marker written into STEP FILE_NAME. This is not the
 # execution or export time; it is passed to build123d's native STEP timestamp
@@ -75,7 +76,11 @@ def main() -> None:
     # CAD-as-code is the point of this server; the README says so plainly.
     namespace: dict = {}
     try:
-        exec(compile(script, "<cad_script>", "exec"), namespace)
+        # stdout is the JSON protocol channel. Keep ordinary script prints on
+        # the separately bounded stderr channel so diagnostics do not corrupt
+        # an otherwise valid geometry result.
+        with redirect_stdout(sys.stderr):
+            exec(compile(script, "<cad_script>", "exec"), namespace)
     except Exception as e:
         fail(f"Script raised {type(e).__name__}: {e}", traceback.format_exc())
         return

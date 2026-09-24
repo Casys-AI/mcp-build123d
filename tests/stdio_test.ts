@@ -215,10 +215,7 @@ Deno.test("server.ts --stdio promotes a fake-bridge export into a readable resou
       (exportedFile.artifact as Record<string, unknown>).sha256,
       sha256,
     );
-    assertEquals(
-      (await Deno.stat(`${exports}/stdio-fixture.glb`)).isFile,
-      true,
-    );
+    assertEquals(Array.from(Deno.readDirSync(exports)), []);
 
     await writer.write(new TextEncoder().encode(`${
       JSON.stringify(request(

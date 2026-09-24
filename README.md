@@ -68,6 +68,40 @@ tessellation.
 
 ## Quick start
 
+### Already have build123d installed
+
+No Docker image or source checkout is needed if you have Deno 2.9.6 and a Python
+3.10+ interpreter with `build123d==0.11.1` and `OCP.__version__ == "7.9.3.1"`
+(`cadquery-ocp-novtk==7.9.3.1.1`). Check the interpreter that the MCP server
+will use:
+
+```bash
+python3 -I -c 'import sys, build123d, OCP; print(sys.executable, build123d.__version__, OCP.__version__)'
+```
+
+Put the printed Python path in your MCP client's stdio entry. Deno downloads the
+published JSR package on first run:
+
+```json
+{
+  "mcpServers": {
+    "build123d": {
+      "command": "deno",
+      "args": ["run", "-A", "jsr:@casys/mcp-build123d@0.6.4/server", "--stdio"],
+      "env": {
+        "BUILD123D_PYTHON_BIN": "/absolute/path/to/qualified/python",
+        "BUILD123D_EXPORT_DIR": "/absolute/path/to/private/cad-exports"
+      }
+    }
+  }
+}
+```
+
+The server checks those versions at startup and refuses a different pair. The
+Python probe uses `-I`, so packages available only through `PYTHONPATH` or the
+user site are not sufficient. If your client cannot find `deno`, set `command`
+to its absolute path.
+
 ### Run a source checkout
 
 Requirements are Deno 2.9.6 and Python 3.10+. The provider qualifies the exact
@@ -113,7 +147,11 @@ For example, a checkout-backed stdio entry is:
         "-A",
         "/absolute/path/to/mcp-build123d/server.ts",
         "--stdio"
-      ]
+      ],
+      "env": {
+        "BUILD123D_PYTHON_BIN": "/absolute/path/to/mcp-build123d/.venv/bin/python",
+        "BUILD123D_EXPORT_DIR": "/absolute/path/to/mcp-build123d/cad-exports"
+      }
     }
   }
 }
@@ -121,12 +159,12 @@ For example, a checkout-backed stdio entry is:
 
 ### Run the published package
 
-The published JSR package `0.6.3` can be started directly; Python and build123d
+The published JSR package `0.6.4` can be started directly; Python and build123d
 are still host dependencies:
 
 ```bash
-BUILD123D_PYTHON_BIN="$PWD/.venv/bin/python" \
-  deno run -A jsr:@casys/mcp-build123d@0.6.3/server --port=3014
+BUILD123D_PYTHON_BIN="/absolute/path/to/qualified/python" \
+  deno run -A jsr:@casys/mcp-build123d@0.6.4/server --port=3014
 ```
 
 `-A` is intentional here: the public tools run arbitrary Python and write
@@ -148,7 +186,7 @@ file location depends on the host; the connection entry is typically:
 ```
 
 HTTP binds to `127.0.0.1` by default; `--hostname=0.0.0.0` is an explicit
-network exposure. The `0.6.3` checkout supports native stdio and the
+network exposure. The `0.6.4` checkout supports native stdio and the
 digest-bound resource contract described below.
 
 ### Run the published provider image
@@ -330,8 +368,9 @@ when retaining evidence.
 
 Same execution, plus files. `formats`: `step` (exact BREP), `stl` (mesh), `gltf`
 (binary `.glb`). `BUILD123D_EXPORT_DIR` is mutable staging (default
-`./cad-exports`); it is not an agent-readable interface. The response returns
-only immutable artifact references alongside the same metrics.
+`./cad-exports`); it is not an agent-readable interface. Each call uses and
+removes its own staging directory when it finishes. The response returns only
+immutable artifact references alongside the same metrics.
 
 Example tool input using the script above:
 
@@ -395,7 +434,7 @@ exact input identity, fixed method, and a closed producer block:
 {
   "producer": {
     "service": "mcp-build123d",
-    "packageVersion": "0.6.3",
+    "packageVersion": "0.6.4",
     "tool": "build123d_observe_assembly_integrity",
     "engine": { "name": "cadquery-ocp", "version": "7.9.3.1" }
   }
@@ -428,13 +467,14 @@ attestation; the fixed method still describes the OCCT/XCAF observation.
   any object or receipt prewritten on disk is ignored. This is not a Digital
   Thread operation or admission ledger, and it does not make an artifact
   canonical product geometry.
-- An export delivery path is mutable and private. Reusing a `name` can replace
-  staging bytes, but the returned `artifact.uri` is digest-bound and names the
-  immutable current-process copy. `resources/read` rehashes that copy before it
-  returns any bytes. Promotion uses a fixed five-second isolated read deadline,
-  so a special file or staging swap fails closed instead of stalling the
-  artifact queue. After a server restart, run a new export before reading an
-  artifact URI again.
+- An export delivery path is mutable and private. Each call stages under a
+  separate directory, then removes that directory on completion; reusing a
+  `name` in another call does not share a delivery path. The returned
+  `artifact.uri` is digest-bound and names the immutable current-process copy.
+  `resources/read` rehashes that copy before it returns any bytes. Promotion
+  uses a fixed five-second isolated read deadline, so a special file or staging
+  swap fails closed instead of stalling the artifact queue. After a server
+  restart, run a new export before reading an artifact URI again.
 - `build123d_export` passes the UTC sentinel `1970-01-01T00:00:00Z` to
   build123d's native STEP `timestamp` parameter. That sentinel is a
   reproducibility marker, not the execution or export time. This provider starts
