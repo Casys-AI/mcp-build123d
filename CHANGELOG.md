@@ -2,6 +2,19 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [0.6.4] - 2026-09-24
+
+- **Simpler native setup.** The README now shows how a client can launch the
+  published JSR package directly in stdio when Deno and the qualified local
+  Python/build123d runtime are already installed, without a Docker image or
+  source checkout. The source-checkout stdio example now selects Python and an
+  export directory explicitly.
+- **Script diagnostics.** Ordinary `print()` output from user CAD scripts goes
+  to the bounded stderr channel, preserving the harness's JSON stdout result.
+- **Concurrent exports.** Each export call has its own private staging
+  directory, removed after artifact promotion. Two concurrent calls using the
+  same export name no longer race on the delivery path.
+
 ## [0.6.3] - 2026-09-08
 
 - **Owned STEP assembly observation.** `build123d_observe_assembly_integrity`

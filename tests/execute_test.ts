@@ -205,6 +205,31 @@ cadTest(
 );
 
 cadTest(
+  "build123d_execute accepts ordinary script print diagnostics",
+  async () => {
+    const result = structuredContent(
+      await handler("build123d_execute")({
+        script: `print("building box")\n${BOX_SCRIPT}`,
+      }),
+    );
+    assertAlmostEquals(
+      (result.metrics as CadMetrics).volume_mm3,
+      1000,
+      1e-6,
+    );
+
+    await assertRejects(
+      async () =>
+        await handler("build123d_execute")({
+          script: 'print("invalid box")\nresult = 42',
+        }),
+      CadExecutionError,
+      "no geometry",
+    );
+  },
+);
+
+cadTest(
   "build123d_execute reports mass only when density is explicit",
   async () => {
     const without = structuredContent(
@@ -443,7 +468,7 @@ Deno.test("artifact promotion exposes verified immutable resources, never paths"
       Deno.errors.NotFound,
     );
 
-    // Delivery files are internal staging only: no name/path crossed MCP.
+    // Direct artifact-store fixtures leave internal staging files behind.
     const deliveryNames = Array.from(Deno.readDirSync(exportsDirectory))
       .map((entry) => entry.name)
       .sort();
@@ -743,9 +768,104 @@ cadTest("hostile delivery names are made inert before promotion", async () => {
     assertEquals(file.artifact.uri.includes("passwd"), false);
     assertEquals(
       Array.from(Deno.readDirSync(exportsDirectory)).map((entry) => entry.name),
-      ["passwd.stl"],
+      [],
     );
   });
+});
+
+Deno.test("same-name concurrent exports keep their own verified bytes", async () => {
+  await withServerRoots(
+    async ({ root, exportsDirectory, artifactsDirectory }) => {
+      const interpreter = `${root}/fake-python`;
+      await Deno.writeTextFile(
+        interpreter,
+        `#!/usr/bin/env python3
+import hashlib, json, os, sys, time
+
+if sys.argv[1:2] == ["-c"]:
+    os.execv(sys.executable, [sys.executable] + sys.argv[1:])
+
+request = json.load(sys.stdin)
+script = request["script"]
+path = request["exports"][0]["path"]
+sync = os.environ["BUILD123D_TEST_SYNC_DIR"]
+first = os.path.join(sync, "first")
+second = os.path.join(sync, "second")
+
+def wait_for(path):
+    deadline = time.monotonic() + 10
+    while not os.path.exists(path):
+        if time.monotonic() >= deadline:
+            raise TimeoutError("concurrent export rendezvous timed out")
+        time.sleep(0.01)
+
+if script == "B":
+    wait_for(first)
+data = ("ISO-10303-21;\\n" + script + "\\nEND-ISO-10303-21;\\n").encode()
+with open(path, "wb") as output:
+    output.write(data)
+with open(first if script == "A" else second, "w") as marker:
+    marker.write(script)
+if script == "A":
+    wait_for(second)
+
+metrics = ${JSON.stringify(FIXTURE_METRICS)}
+json.dump({"ok": True, "metrics": metrics, "exports": [{
+    "format": "step", "path": path, "bytes": len(data),
+    "sha256": hashlib.sha256(data).hexdigest()
+}]}, sys.stdout)
+`,
+      );
+      await Deno.chmod(interpreter, 0o700);
+      const previousPython = Deno.env.get("BUILD123D_PYTHON_BIN");
+      const previousSync = Deno.env.get("BUILD123D_TEST_SYNC_DIR");
+      Deno.env.set("BUILD123D_PYTHON_BIN", interpreter);
+      Deno.env.set("BUILD123D_TEST_SYNC_DIR", root);
+      try {
+        const assembly = testAssembly(exportsDirectory, artifactsDirectory);
+        const exportHandler = assembly.toolsClient.buildHandlersMap().get(
+          "build123d_export",
+        );
+        if (!exportHandler) throw new Error("Missing export handler");
+        const results = await Promise.all(
+          ["A", "B"].map((script) =>
+            exportHandler({ script, formats: ["step"], name: "same" })
+          ),
+        );
+        const files = results.map((result) =>
+          (structuredContent(result).files as ExportPayloadFile[])[0]
+        );
+        assertEquals(
+          files[0].artifact.sha256 === files[1].artifact.sha256,
+          false,
+        );
+        for (const [index, file] of files.entries()) {
+          const resource = await assembly.app.readResourceContent(
+            file.artifact.uri,
+          );
+          const bytes = Uint8Array.from(
+            atob(resource?.blob ?? ""),
+            (char) => char.charCodeAt(0),
+          );
+          assertEquals(await sha256Hex(bytes), file.artifact.sha256);
+          assertStringIncludes(
+            new TextDecoder().decode(bytes),
+            ["A", "B"][index],
+          );
+        }
+        assertEquals(Array.from(Deno.readDirSync(exportsDirectory)), []);
+      } finally {
+        if (previousPython === undefined) {
+          Deno.env.delete("BUILD123D_PYTHON_BIN");
+        } else Deno.env.set("BUILD123D_PYTHON_BIN", previousPython);
+        if (previousSync === undefined) {
+          Deno.env.delete(
+            "BUILD123D_TEST_SYNC_DIR",
+          );
+        } else Deno.env.set("BUILD123D_TEST_SYNC_DIR", previousSync);
+      }
+    },
+  );
 });
 
 Deno.test("different export bytes receive different artifact identities", async () => {
