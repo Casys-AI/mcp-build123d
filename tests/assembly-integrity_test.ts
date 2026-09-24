@@ -6,7 +6,7 @@ import {
   assertRejects,
   assertThrows,
 } from "@std/assert";
-import { SchemaValidator } from "@casys/mcp-server";
+import { SchemaValidator } from "@casys/mcp-platform";
 import {
   ASSEMBLY_INTEGRITY_MAXIMUM_BASE64_CHARACTERS,
   ASSEMBLY_INTEGRITY_MAXIMUM_OCCURRENCES,

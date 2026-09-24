@@ -1,0 +1,186 @@
+{
+  "schemaVersion": "build123d-assembly-integrity-observation/1.0",
+  "kind": "assembly-integrity-observation",
+  "producer": {
+    "service": "mcp-build123d",
+    "packageVersion": "0.6.3",
+    "tool": "build123d_observe_assembly_integrity",
+    "engine": {
+      "name": "cadquery-ocp",
+      "version": "7.9.3.1"
+    }
+  },
+  "inputArtifact": {
+    "mimeType": "model/step",
+    "sha256": "fed93fd7dcb222e4ec66aa0df14276f13a4f21a391da0df68810cd2a107e22ca",
+    "bytes": 48531
+  },
+  "method": {
+    "id": "occt-assembly-integrity-v1",
+    "version": "1.0.0",
+    "linearToleranceMm": 0.000001
+  },
+  "importability": {
+    "status": "observed",
+    "value": "imported"
+  },
+  "unitSystem": {
+    "status": "observed",
+    "value": "mm"
+  },
+  "topology": {
+    "brepValidity": {
+      "status": "observed",
+      "value": "valid"
+    },
+    "solidCount": {
+      "status": "observed",
+      "value": 3
+    },
+    "shellCount": {
+      "status": "observed",
+      "value": 3
+    },
+    "degenerateEdgeCount": {
+      "status": "observed",
+      "value": 0
+    },
+    "freeEdgeCount": {
+      "status": "observed",
+      "value": 0
+    }
+  },
+  "occurrences": {
+    "status": "observed",
+    "value": [
+      {
+        "label": "55bbfb96-ebd9-4387-ad46-6274a566f3c1",
+        "transform": {
+          "status": "observed",
+          "value": [
+            1,
+            0,
+            0,
+            200,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "label": "a0878bd5-f3d8-4899-9ec9-50dbffcd4ba7",
+        "transform": {
+          "status": "observed",
+          "value": [
+            1,
+            0,
+            0,
+            400,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "label": "cc6cabf4-2e0b-4033-a5e1-288d04244a1d",
+        "transform": {
+          "status": "observed",
+          "value": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      }
+    ]
+  },
+  "pairs": {
+    "status": "observed",
+    "value": [
+      {
+        "firstLabel": "55bbfb96-ebd9-4387-ad46-6274a566f3c1",
+        "secondLabel": "a0878bd5-f3d8-4899-9ec9-50dbffcd4ba7",
+        "linearToleranceMm": 0.000001,
+        "minimumDistanceMm": {
+          "status": "observed",
+          "value": 175
+        },
+        "intersectionVolumeMm3": {
+          "status": "observed",
+          "value": 0
+        },
+        "contact": {
+          "status": "observed",
+          "value": "no-contact"
+        }
+      },
+      {
+        "firstLabel": "55bbfb96-ebd9-4387-ad46-6274a566f3c1",
+        "secondLabel": "cc6cabf4-2e0b-4033-a5e1-288d04244a1d",
+        "linearToleranceMm": 0.000001,
+        "minimumDistanceMm": {
+          "status": "observed",
+          "value": 150
+        },
+        "intersectionVolumeMm3": {
+          "status": "observed",
+          "value": 0
+        },
+        "contact": {
+          "status": "observed",
+          "value": "no-contact"
+        }
+      },
+      {
+        "firstLabel": "a0878bd5-f3d8-4899-9ec9-50dbffcd4ba7",
+        "secondLabel": "cc6cabf4-2e0b-4033-a5e1-288d04244a1d",
+        "linearToleranceMm": 0.000001,
+        "minimumDistanceMm": {
+          "status": "observed",
+          "value": 345
+        },
+        "intersectionVolumeMm3": {
+          "status": "observed",
+          "value": 0
+        },
+        "contact": {
+          "status": "observed",
+          "value": "no-contact"
+        }
+      }
+    ]
+  }
+}

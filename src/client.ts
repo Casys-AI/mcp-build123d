@@ -22,7 +22,7 @@ import type {
   ExportArtifactPublisher,
 } from "./tools/mod.ts";
 import type { OwnedStepResolver } from "./artifacts.ts";
-import type { MCPToolMeta, ToolAnnotations } from "@casys/mcp-server";
+import type { MCPToolMeta, ToolAnnotations } from "@casys/mcp-platform";
 
 export {
   allTools,

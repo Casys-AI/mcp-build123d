@@ -1,6 +1,6 @@
 /** Fixed STEP-only OCCT/XCAF assembly-integrity observation tool. */
 
-import type { StructuredToolResult } from "@casys/mcp-server";
+import type { StructuredToolResult } from "@casys/mcp-platform";
 import {
   BUILD123D_ARTIFACT_URI_PREFIX,
   BUILD123D_MAXIMUM_ARTIFACT_BYTES,
@@ -17,6 +17,7 @@ import {
   observeAssemblyIntegrity,
   OCCT_ASSEMBLY_INTEGRITY_METHOD,
 } from "../api/assembly-integrity-bridge.ts";
+import { ASSEMBLY_VIEWER_URI } from "../ui/constants.ts";
 import type { CadTool } from "./types.ts";
 
 export const ASSEMBLY_INTEGRITY_TOOL = "build123d_observe_assembly_integrity";
@@ -300,6 +301,7 @@ export function createAssemblyIntegrityTools(
     },
     inputSchema: INPUT_SCHEMA,
     outputSchema: ASSEMBLY_INTEGRITY_OUTPUT_SCHEMA,
+    _meta: { ui: { resourceUri: ASSEMBLY_VIEWER_URI } },
     handler: async (args): Promise<StructuredToolResult> => {
       const observation = await observeAssemblyIntegrity(args, {
         resolveOwnedStep: options.resolveOwnedStep,

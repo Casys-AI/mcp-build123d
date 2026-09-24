@@ -2,6 +2,36 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [Unreleased]
+
+- **MCP Platform package name.** Direct framework imports now use the canonical
+  `@casys/mcp-platform@0.28.1` package and the viewer rebuild workflow checks
+  out `Casys-AI/mcp-platform`. The MCP protocol surface and operational server
+  names are unchanged.
+- **Three MCP App viewers.** The provider now registers separate geometry,
+  assembly-observation, and 2D-inspection resources. The existing assembly tool
+  is bound to its factual datasheet, while the new `build123d_project_2d` tool
+  is bound to a switchable fixed-projection viewer. All three surfaces share the
+  exact `Powered by Casys.ai` footer and concise brand treatment used in the
+  ERPNext beta visual language.
+- **Fixed STEP-to-SVG inspection projection.** `build123d_project_2d` accepts
+  exactly one digest-bound inline STEP or current-process owned STEP resource
+  and returns fixed top, front, right, and isometric SVGs plus an optional fixed
+  mid-envelope YZ section. The contract accepts no caller code, path, camera,
+  orientation, section plane, tolerance, style, or runtime choice. The result is
+  for visual inspection and is not a dimensioned manufacturing drawing.
+- **3D inspection controls.** The geometry viewer adds axis-selectable visual
+  section cuts and approximate two-point distance measurement on the displayed
+  GLB mesh. Exact measurements remain the OCCT/BREP tool results. Stable
+  assembly-component selection and model-context injection remain future work.
+- **Inspector fixtures.** The local example server retains the verified bracket
+  export and digest-checked Digital Thread-derived assembly and drawing inputs
+  for repeatable UI inspection and screenshot capture; its local tools do not
+  perform fresh CAD execution. Assembly fixtures now provide digest-bound
+  presentation names, so occurrence pairs lead with readable component names
+  while exact STEP labels remain available as technical identities. UUID- or
+  digest-only results without that metadata receive stable localized aliases.
+
 ## [0.6.4] - 2026-09-24
 
 - **Simpler native setup.** The README now shows how a client can launch the
@@ -95,7 +125,7 @@ All notable changes to `@casys/mcp-build123d` will be documented in this file.
   its loading status until the first result rather than showing an empty state
   after the handshake.
 - **Kit pin.** The bundle is rebuilt against `@casys/mcp-view@0.9.3` and
-  `@casys/mcp-view-components@0.9.0` (`Casys-AI/mcp-server@b08802d`), with an
+  `@casys/mcp-view-components@0.9.0` (`Casys-AI/mcp-platform@b08802d`), with an
   audited CI source pin and frozen viewer dependency lock.
 - **Reproducible documentation capture.** `deno task capture:docs` renders the
   committed bundle with the real `build123d_export` fixture

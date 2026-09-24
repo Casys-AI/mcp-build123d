@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "build123d-inspector-assembly/1.0",
+  "cases": {
+    "tps03": {
+      "title": "Two-piece tablet stand",
+      "caption": "Two observed occurrences in contact, with zero intersection volume",
+      "project": "two-piece-tablet-stand-tps03",
+      "recordedStage": "L3",
+      "captureStatus": "recorded",
+      "observedAt": "2026-08-26T15:25:24.329Z",
+      "captureFile": "tps03.json",
+      "sourceCapture": {
+        "reference": "casys-digital-thread/state/local/assembly-integrity-observation-captures/06c7252971e86e6e73f69429cf5930648cf0bd8a88c37dfd75c4d277a72367c1.json",
+        "sha256": "06c7252971e86e6e73f69429cf5930648cf0bd8a88c37dfd75c4d277a72367c1",
+        "bytes": 4545
+      },
+      "sourceStep": {
+        "reference": "casys-digital-thread/state/local/thread-assets/c910c9ec5813f00906cfdc0026161f143ce83557fd297455edf9195717c74c68.step",
+        "sha256": "c910c9ec5813f00906cfdc0026161f143ce83557fd297455edf9195717c74c68",
+        "bytes": 32726
+      },
+      "sourceGlb": {
+        "reference": "casys-digital-thread/state/local/thread-assets/8cc16a27badc4a3a168a13515b91c7636176c3ac2dddf0ecd550efb10437aa40.glb",
+        "sha256": "8cc16a27badc4a3a168a13515b91c7636176c3ac2dddf0ecd550efb10437aa40",
+        "bytes": 6336
+      },
+      "labelSource": "casys-digital-thread/docs/annex/project-dossiers/two-piece-tablet-stand-tps03/domains/sysml.md",
+      "labels": {
+        "22afa6fa-829b-4372-b126-6bbbeefd1a51": "StandBase",
+        "56a97aee-becf-4645-8e76-3bb3406e3cdc": "StandBackrest"
+      },
+      "observationFingerprint": "9b89464d1f8aec17db0e46bc3d6f879cf57081011b59b5f882073f1f26e12eed",
+      "limits": {
+        "fitness": "none",
+        "motion": "none",
+        "safety": "none",
+        "strength": "none",
+        "verdict": "none"
+      }
+    },
+    "msm01": {
+      "title": "Modular sensor mount",
+      "caption": "Three observed occurrences, deliberately separated",
+      "project": "modular-sensor-mount-msm01",
+      "recordedStage": "L3",
+      "captureStatus": "recorded",
+      "observedAt": "2026-08-26T03:07:01.685Z",
+      "captureFile": "msm01.json",
+      "sourceCapture": {
+        "reference": "casys-digital-thread/state/local/assembly-integrity-observation-captures/69f6f6848f35c581d76b4cd94c1c81397f4e4524f6437cfce9d1f811681c6cb8.json",
+        "sha256": "69f6f6848f35c581d76b4cd94c1c81397f4e4524f6437cfce9d1f811681c6cb8",
+        "bytes": 5590
+      },
+      "sourceStep": {
+        "reference": "casys-digital-thread/state/local/thread-assets/fed93fd7dcb222e4ec66aa0df14276f13a4f21a391da0df68810cd2a107e22ca.step",
+        "sha256": "fed93fd7dcb222e4ec66aa0df14276f13a4f21a391da0df68810cd2a107e22ca",
+        "bytes": 48531
+      },
+      "sourceGlb": {
+        "reference": "casys-digital-thread/state/local/thread-assets/1c1fbb1270aded6ad2d5584ff4fc627c1135cee08240818f825998d5262e72a0.glb",
+        "sha256": "1c1fbb1270aded6ad2d5584ff4fc627c1135cee08240818f825998d5262e72a0",
+        "bytes": 9296
+      },
+      "labelSource": "casys-digital-thread/docs/annex/project-dossiers/modular-sensor-mount-msm01/domains/sysml.md",
+      "labels": {
+        "cc6cabf4-2e0b-4033-a5e1-288d04244a1d": "BasePlate",
+        "55bbfb96-ebd9-4387-ad46-6274a566f3c1": "Riser",
+        "a0878bd5-f3d8-4899-9ec9-50dbffcd4ba7": "SensorCradle"
+      },
+      "observationFingerprint": "2e11da68ba75d818e807e7d1568d101ae30e07af19d3885bb75d8fd66520e7e3",
+      "limits": {
+        "fitness": "none",
+        "motion": "none",
+        "safety": "none",
+        "strength": "none",
+        "verdict": "none"
+      }
+    }
+  }
+}

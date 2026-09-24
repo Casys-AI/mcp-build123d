@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg width="31.78mm" height="36.78mm" viewBox="-15.89 -18.39 31.78 36.78" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <g transform="scale(1,-1)" stroke-linecap="round">
+    <g fill="rgb(218,233,253)" stroke="rgb(30,64,174)" stroke-width="0.18" id="Cut face">
+      <path d="M 12.0,-14.5 L -15.0,-14.5 L -15.0,-17.5 L 15.0,-17.5 L 15.0,17.5 L 12.0,17.5 L 12.0,-14.5" />
+    </g>
+  </g>
+</svg>

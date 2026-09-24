@@ -4,6 +4,20 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import {
+  appendMeasurementPoint,
+  type CadMeasurement,
+  type SceneBounds,
+  type SectionPlaneDefinition,
+  sectionPlaneDefinition,
+  type SectionPlaneState,
+} from "./inspection-model.ts";
+
+export interface CadSceneOptions {
+  readonly onMeasurementChange?: (
+    measurement: CadMeasurement | undefined,
+  ) => void;
+}
 
 export interface CadSceneController {
   readonly meshes: number;
@@ -11,6 +25,10 @@ export interface CadSceneController {
   fit(): void;
   reset(): void;
   setWireframe(enabled: boolean): void;
+  setSectionPlane(state: SectionPlaneState): SectionPlaneDefinition;
+  setMeasurementEnabled(enabled: boolean): void;
+  pickMeasurementAtCenter(): boolean;
+  clearMeasurement(): void;
   dispose(): void;
 }
 
@@ -39,6 +57,7 @@ function glbBuffer(bytes: Uint8Array): ArrayBuffer {
 export async function mountCadScene(
   viewport: HTMLElement,
   bytes: Uint8Array,
+  options: CadSceneOptions = {},
 ): Promise<CadSceneController> {
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -49,6 +68,7 @@ export async function mountCadScene(
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
+  renderer.localClippingEnabled = true;
   viewport.replaceChildren(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -60,6 +80,7 @@ export async function mountCadScene(
   controls.dampingFactor = 0.07;
   controls.screenSpacePanning = true;
   controls.zoomToCursor = true;
+  controls.listenToKeyEvents(viewport);
 
   scene.add(new THREE.HemisphereLight(0xf5e9dc, 0x211c18, 2.1));
   const key = new THREE.DirectionalLight(0xffffff, 3.2);
@@ -116,6 +137,167 @@ export async function mountCadScene(
   (grid.material as THREE.Material).transparent = true;
   scene.add(grid);
 
+  const sceneBounds: SceneBounds = {
+    min: [bounds.min.x, bounds.min.y, bounds.min.z],
+    max: [bounds.max.x, bounds.max.y, bounds.max.z],
+  };
+  const originalClippingPlanes = new Map<
+    THREE.Material,
+    THREE.Plane[] | null
+  >();
+  model.traverse((object: THREE.Object3D) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const materials = Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material];
+    for (const material of materials) {
+      if (!originalClippingPlanes.has(material)) {
+        originalClippingPlanes.set(
+          material,
+          material.clippingPlanes ? [...material.clippingPlanes] : null,
+        );
+      }
+    }
+  });
+  const sectionPlane = new THREE.Plane();
+  let sectionEnabled = false;
+  const setSectionPlane = (
+    state: SectionPlaneState,
+  ): SectionPlaneDefinition => {
+    const definition = sectionPlaneDefinition(sceneBounds, state);
+    sectionPlane.normal.set(...definition.normal);
+    sectionPlane.constant = definition.constant;
+    sectionEnabled = state.enabled;
+    for (const [material, original] of originalClippingPlanes) {
+      material.clippingPlanes = state.enabled
+        ? [...(original ?? []), sectionPlane]
+        : original;
+      material.needsUpdate = true;
+    }
+    return definition;
+  };
+
+  const measurementOverlay = new THREE.Group();
+  measurementOverlay.name = "build123d-measurement";
+  scene.add(measurementOverlay);
+  const markerGeometry = new THREE.SphereGeometry(radius * 0.018, 18, 12);
+  const markerMaterial = new THREE.MeshBasicMaterial({
+    color: 0xd97706,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const measurementLineMaterial = new THREE.LineBasicMaterial({
+    color: 0xd97706,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let measurement: CadMeasurement | undefined;
+  let measurementWorldPoints: THREE.Vector3[] = [];
+  let measurementLine: THREE.Line | undefined;
+
+  const renderMeasurement = (): void => {
+    if (measurementLine) measurementLine.geometry.dispose();
+    measurementLine = undefined;
+    measurementOverlay.clear();
+    for (const point of measurementWorldPoints) {
+      const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+      marker.position.copy(point);
+      marker.renderOrder = 100;
+      measurementOverlay.add(marker);
+    }
+    if (measurementWorldPoints.length === 2) {
+      measurementLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(measurementWorldPoints),
+        measurementLineMaterial,
+      );
+      measurementLine.renderOrder = 99;
+      measurementOverlay.add(measurementLine);
+    }
+  };
+  const clearMeasurement = (notify = true): void => {
+    measurement = undefined;
+    measurementWorldPoints = [];
+    renderMeasurement();
+    if (notify) options.onMeasurementChange?.(undefined);
+  };
+
+  let measurementEnabled = false;
+  let pointerStart:
+    | { readonly pointerId: number; readonly x: number; readonly y: number }
+    | undefined;
+  const setMeasurementEnabled = (enabled: boolean): void => {
+    measurementEnabled = enabled;
+    pointerStart = undefined;
+    if (enabled) {
+      renderer.domElement.dataset.measurement = "active";
+    } else {
+      delete renderer.domElement.dataset.measurement;
+    }
+  };
+  const onPointerDown = (event: PointerEvent): void => {
+    if (!measurementEnabled || !event.isPrimary || event.button !== 0) return;
+    pointerStart = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+  };
+  const onPointerCancel = (event: PointerEvent): void => {
+    if (pointerStart?.pointerId === event.pointerId) pointerStart = undefined;
+  };
+  const pickMeasurementAt = (clientX: number, clientY: number): boolean => {
+    if (!measurementEnabled) return false;
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    pointer.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObject(model, true).find((intersection) => {
+      if (!(intersection.object as THREE.Mesh).isMesh) return false;
+      return !sectionEnabled ||
+        sectionPlane.distanceToPoint(intersection.point) >= 0;
+    });
+    if (!hit) return false;
+
+    const startsFresh = !measurement || measurement.pointsMm.length === 2;
+    measurementWorldPoints = startsFresh
+      ? [hit.point.clone()]
+      : [measurementWorldPoints[0], hit.point.clone()];
+    measurement = appendMeasurementPoint(
+      measurement,
+      [hit.point.x, hit.point.y, hit.point.z],
+    );
+    renderMeasurement();
+    options.onMeasurementChange?.(measurement);
+    return true;
+  };
+  const pickMeasurementAtCenter = (): boolean => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    return pickMeasurementAt(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+    );
+  };
+  const onPointerUp = (event: PointerEvent): void => {
+    const start = pointerStart;
+    pointerStart = undefined;
+    if (
+      !measurementEnabled || !start || start.pointerId !== event.pointerId ||
+      Math.hypot(event.clientX - start.x, event.clientY - start.y) > 5
+    ) return;
+    pickMeasurementAt(event.clientX, event.clientY);
+  };
+  renderer.domElement.addEventListener("pointerdown", onPointerDown);
+  renderer.domElement.addEventListener("pointercancel", onPointerCancel);
+  renderer.domElement.addEventListener("pointerup", onPointerUp);
+
   // A host theme update changes palette only: the verified model, controls and
   // camera stay mounted. Computed CSS resolves the aliases to the shared kit's
   // tokens before they reach WebGL; the overlay uses the same palette.
@@ -123,10 +305,15 @@ export async function mountCadScene(
     const style = getComputedStyle(viewport);
     const background = style.getPropertyValue("--cad-scene-background").trim();
     const gridColor = style.getPropertyValue("--cad-grid").trim();
+    const accent = style.getPropertyValue("--cad-accent").trim();
     if (background) (scene.background as THREE.Color).set(background);
     fog.color.copy(scene.background as THREE.Color);
     if (gridColor) {
       (grid.material as THREE.LineBasicMaterial).color.set(gridColor);
+    }
+    if (accent) {
+      markerMaterial.color.set(accent);
+      measurementLineMaterial.color.set(accent);
     }
   };
   applyTheme();
@@ -214,6 +401,10 @@ export async function mountCadScene(
     fit,
     reset,
     setWireframe,
+    setSectionPlane,
+    setMeasurementEnabled,
+    pickMeasurementAtCenter,
+    clearMeasurement,
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -221,6 +412,11 @@ export async function mountCadScene(
       observer.disconnect();
       themeObserver.disconnect();
       preferredTheme.removeEventListener("change", applyTheme);
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      setMeasurementEnabled(false);
+      clearMeasurement(false);
       controls.dispose();
       model.traverse((object: THREE.Object3D) => {
         const mesh = object as THREE.Mesh;
@@ -236,6 +432,9 @@ export async function mountCadScene(
         ? grid.material
         : [grid.material];
       for (const material of gridMaterials) material.dispose();
+      markerGeometry.dispose();
+      markerMaterial.dispose();
+      measurementLineMaterial.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
       viewport.replaceChildren();

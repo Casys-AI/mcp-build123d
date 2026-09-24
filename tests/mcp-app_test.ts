@@ -2,18 +2,26 @@
 
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { relative } from "@std/path";
-import { SchemaValidator } from "@casys/mcp-server";
+import { SchemaValidator } from "@casys/mcp-platform";
 import { CadToolsClient } from "../src/client.ts";
 import {
   ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES,
   AssemblyIntegrityObservationError,
 } from "../src/api/assembly-integrity-bridge.ts";
+import {
+  Projection2dGenerationError,
+  Projection2dInputError,
+} from "../src/api/projection-2d-bridge.ts";
 import { CadExecutionLimitError } from "../src/api/python-bridge.ts";
 import { createBuild123dExportExecution } from "../src/artifacts.ts";
 import { createCadMcpApp } from "../src/server-app.ts";
 import { build123dToolErrorResult } from "../src/tool-errors.ts";
 import { geometryToolResult } from "../src/tools/execute.ts";
-import { RESULTS_VIEWER_URI } from "../src/ui/constants.ts";
+import {
+  ASSEMBLY_VIEWER_URI,
+  DRAWING_VIEWER_URI,
+  RESULTS_VIEWER_URI,
+} from "../src/ui/constants.ts";
 import {
   BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA,
   BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
@@ -283,20 +291,32 @@ Deno.test("tool descriptors give agents a factual contract and behavioral hints"
     "build123d_execute",
     "build123d_export",
     "build123d_observe_assembly_integrity",
+    "build123d_project_2d",
   ]);
   const execute = tools.find((tool) => tool.name === "build123d_execute");
   const exported = tools.find((tool) => tool.name === "build123d_export");
   const observed = tools.find((tool) =>
     tool.name === "build123d_observe_assembly_integrity"
   );
-  if (!execute || !exported || !observed) throw new Error("Missing CAD tools");
+  const projected = tools.find((tool) => tool.name === "build123d_project_2d");
+  if (!execute || !exported || !observed || !projected) {
+    throw new Error("Missing CAD tools");
+  }
   assertEquals(execute._meta?.ui?.resourceUri, RESULTS_VIEWER_URI);
   assertEquals(exported._meta?.ui?.resourceUri, RESULTS_VIEWER_URI);
+  assertEquals(observed._meta?.ui?.resourceUri, ASSEMBLY_VIEWER_URI);
+  assertEquals(projected._meta?.ui?.resourceUri, DRAWING_VIEWER_URI);
   assertEquals(execute.annotations?.destructiveHint, true);
   assertEquals(execute.annotations?.idempotentHint, false);
   assertEquals(execute.annotations?.openWorldHint, true);
   assertEquals(observed.annotations, {
     title: "Observe STEP assembly integrity",
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assertEquals(projected.annotations, {
+    title: "Project STEP for 2D inspection",
     destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
@@ -332,6 +352,7 @@ Deno.test("HTTP discover and tools/list expose instructions, annotations and sta
     const tools =
       (listed.body.result as { tools: Array<Record<string, unknown>> })
         .tools;
+    assertEquals(tools.every((tool) => tool._meta === undefined), true);
     const exported = tools.find((tool) => tool.name === "build123d_export");
     assertEquals(
       (exported?.annotations as { destructiveHint: boolean }).destructiveHint,
@@ -345,6 +366,62 @@ Deno.test("HTTP discover and tools/list expose instructions, annotations and sta
       (exported?.annotations as { openWorldHint: boolean }).openWorldHint,
       true,
     );
+
+    const textOnly = await mcpRpc(port, "tools/call", {
+      name: "build123d_execute",
+      arguments: {},
+    });
+    const textOnlyResult = textOnly.body.result as {
+      isError: boolean;
+      content: Array<{ type: string; text: string }>;
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(textOnlyResult.isError, true);
+    assertEquals(
+      textOnlyResult.structuredContent.code,
+      "request.invalid_arguments",
+    );
+    assertEquals(textOnlyResult.content[0]?.type, "text");
+    assertStringIncludes(
+      textOnlyResult.content[0]?.text ?? "",
+      "Tool arguments do not satisfy",
+    );
+  } finally {
+    await http.shutdown();
+  }
+});
+
+Deno.test("tools advertise only viewer resources that were registered", async () => {
+  const assembly = createCadMcpApp({
+    viewerModuleUrl: "file:///project/server.ts",
+    viewerFilesystem: {
+      exists: (path) => path.endsWith("/assembly-viewer/index.html"),
+      readFile: () => "<!doctype html><title>assembly</title>",
+    },
+  });
+  assertEquals(assembly.viewers, {
+    registered: ["assembly-viewer"],
+    skipped: ["results-viewer", "drawing-viewer"],
+  });
+
+  const port = startOnFreePort();
+  const http = await assembly.app.startHttp({ port, onListen: () => {} });
+  try {
+    const listed = await mcpRpc(port, "tools/list");
+    const tools =
+      (listed.body.result as { tools: Array<Record<string, unknown>> }).tools;
+    const viewerUri = (
+      name: string,
+    ): unknown => ((tools.find((tool) => tool.name === name)?._meta as
+      | { ui?: { resourceUri?: unknown } }
+      | undefined)?.ui?.resourceUri);
+    assertEquals(viewerUri("build123d_execute"), undefined);
+    assertEquals(viewerUri("build123d_export"), undefined);
+    assertEquals(
+      viewerUri("build123d_observe_assembly_integrity"),
+      ASSEMBLY_VIEWER_URI,
+    );
+    assertEquals(viewerUri("build123d_project_2d"), undefined);
   } finally {
     await http.shutdown();
   }
@@ -791,7 +868,7 @@ Deno.test(
   },
 );
 
-Deno.test("the result viewer is the only registered viewer and loads from its published path", async () => {
+Deno.test("the three published viewers load from their package paths", async () => {
   const seen: string[] = [];
   const remote = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen: () => {} },
@@ -807,15 +884,25 @@ Deno.test("the result viewer is the only registered viewer and loads from its pu
         `http://127.0.0.1:${port}/@casys/mcp-build123d/0.6.4/server.ts`,
     });
     assertEquals(assembly.viewers, {
-      registered: ["results-viewer"],
+      registered: ["results-viewer", "assembly-viewer", "drawing-viewer"],
       skipped: [],
     });
-    assertStringIncludes(
-      (await assembly.app.readResourceContent(RESULTS_VIEWER_URI))?.text ?? "",
-      "published CAD result",
-    );
+    for (
+      const uri of [
+        RESULTS_VIEWER_URI,
+        ASSEMBLY_VIEWER_URI,
+        DRAWING_VIEWER_URI,
+      ]
+    ) {
+      assertStringIncludes(
+        (await assembly.app.readResourceContent(uri))?.text ?? "",
+        "published CAD result",
+      );
+    }
     assertEquals(seen, [
       "/@casys/mcp-build123d/0.6.4/src/ui/dist/results-viewer/index.html",
+      "/@casys/mcp-build123d/0.6.4/src/ui/dist/assembly-viewer/index.html",
+      "/@casys/mcp-build123d/0.6.4/src/ui/dist/drawing-viewer/index.html",
     ]);
   } finally {
     await remote.shutdown();
@@ -846,7 +933,7 @@ Deno.test("viewer resource failures never expose host paths through HTTP", async
     );
     assertStringIncludes(
       JSON.stringify(response.body),
-      "results viewer could not be read",
+      "requested build123d viewer could not be read",
     );
   } finally {
     await http.shutdown();
@@ -856,7 +943,7 @@ Deno.test("viewer resource failures never expose host paths through HTTP", async
 Deno.test("the generated result viewer uses resources/read instead of a private tool", async () => {
   const assembly = createCadMcpApp();
   assertEquals(assembly.viewers, {
-    registered: ["results-viewer"],
+    registered: ["results-viewer", "assembly-viewer", "drawing-viewer"],
     skipped: [],
   });
   const html =
@@ -874,6 +961,14 @@ Deno.test("the generated result viewer uses resources/read instead of a private 
   assertStringIncludes(html, "readServerResource");
   assertEquals(html.includes("build123d_export_read"), false);
   assertEquals(/<script[^>]+src=/i.test(html), false);
+
+  for (const uri of [ASSEMBLY_VIEWER_URI, DRAWING_VIEWER_URI]) {
+    const inspectionHtml =
+      (await assembly.app.readResourceContent(uri))?.text ?? "";
+    assertStringIncludes(inspectionHtml, BUILD123D_MCP_APP_INFO.name);
+    assertStringIncludes(inspectionHtml, "Powered by Casys.ai");
+    assertEquals(/<script[^>]+src=/i.test(inspectionHtml), false);
+  }
 });
 
 Deno.test("assembly-integrity accepts a legal-size inline envelope through the HTTP cap", async () => {
@@ -991,6 +1086,30 @@ Deno.test("assembly-integrity observer failures are structured and non-retryable
     "assembly_integrity.observation_failed",
   );
   assertEquals(result.structuredContent.retryable, false);
+});
+
+Deno.test("2D projection failures keep input and generation recovery distinct", () => {
+  const invalid = build123dToolErrorResult(
+    "build123d_project_2d",
+    new Projection2dInputError("private input detail"),
+  );
+  assertEquals(invalid.structuredContent.code, "projection_2d.input_invalid");
+  assertEquals(invalid.structuredContent.retryable, false);
+  assertEquals(JSON.stringify(invalid).includes("private input detail"), false);
+
+  const failed = build123dToolErrorResult(
+    "build123d_project_2d",
+    new Projection2dGenerationError("private harness detail"),
+  );
+  assertEquals(
+    failed.structuredContent.code,
+    "projection_2d.generation_failed",
+  );
+  assertEquals(failed.structuredContent.retryable, false);
+  assertEquals(
+    JSON.stringify(failed).includes("private harness detail"),
+    false,
+  );
 });
 
 Deno.test("execution resource limits are structured, non-retryable recovery errors", () => {

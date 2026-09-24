@@ -4,7 +4,7 @@
  * @module lib/cad/tools/types
  */
 
-import type { MCPToolMeta, ToolAnnotations } from "@casys/mcp-server";
+import type { MCPToolMeta, ToolAnnotations } from "@casys/mcp-platform";
 
 export type CadToolCategory = "execute";
 

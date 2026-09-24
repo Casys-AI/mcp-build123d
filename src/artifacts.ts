@@ -8,7 +8,7 @@
  * on disk is deliberately invisible after restart.
  */
 
-import type { McpApp, MCPResource, ResourceHandler } from "@casys/mcp-server";
+import type { McpApp, MCPResource, ResourceHandler } from "@casys/mcp-platform";
 import { isAbsolute, relative, resolve } from "@std/path";
 import type {
   CadExportFile,

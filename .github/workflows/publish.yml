@@ -24,9 +24,9 @@ jobs:
       - name: Check out audited MCP View kit
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          repository: Casys-AI/mcp-server
+          repository: Casys-AI/mcp-platform
           ref: b08802df353bb25d25a1c8d64b22ea61b5287ae0
-          path: .deps/mcp-server
+          path: .deps/mcp-platform
           persist-credentials: false
 
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
@@ -35,9 +35,9 @@ jobs:
 
       - name: Rebuild and verify committed MCP App
         env:
-          MCP_VIEW_MODULE: file://${{ github.workspace }}/.deps/mcp-server/packages/view/mod.ts
-          MCP_VIEW_CONTRACTS_MODULE: file://${{ github.workspace }}/.deps/mcp-server/packages/view-contracts/mod.ts
-          MCP_VIEW_COMPONENTS_MODULE: file://${{ github.workspace }}/.deps/mcp-server/packages/view-components/mod.ts
+          MCP_VIEW_MODULE: file://${{ github.workspace }}/.deps/mcp-platform/packages/view/mod.ts
+          MCP_VIEW_CONTRACTS_MODULE: file://${{ github.workspace }}/.deps/mcp-platform/packages/view-contracts/mod.ts
+          MCP_VIEW_COMPONENTS_MODULE: file://${{ github.workspace }}/.deps/mcp-platform/packages/view-components/mod.ts
         run: |
           deno task build:ui
           git diff --exit-code -- src/ui/dist

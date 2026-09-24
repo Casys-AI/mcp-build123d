@@ -1,5 +1,5 @@
 /**
- * MCP Server Bootstrap for CAD Tools
+ * MCP Platform Bootstrap for CAD Tools
  *
  * Stateless HTTP server (default port: 3014):
  *   deno run --allow-all server.ts --port=3014
@@ -52,8 +52,9 @@ async function main() {
     await server.startHttp({
       port: httpPort,
       hostname,
-      // The observer's closed artifact envelope is inline base64. Keep this cap
-      // finite, but large enough for its documented 128 MiB decoded STEP bound.
+      // The assembly observer and 2D projector accept the same closed inline
+      // artifact envelope. Keep this cap finite, but large enough for their
+      // documented 128 MiB decoded STEP bound.
       maxBodyBytes: ASSEMBLY_INTEGRITY_MAXIMUM_HTTP_BODY_BYTES,
       cors: true,
       onListen: (info) => {

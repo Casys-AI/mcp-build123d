@@ -10,6 +10,10 @@ import {
   AssemblyIntegrityInputError,
   AssemblyIntegrityObservationError,
 } from "./api/assembly-integrity-bridge.ts";
+import {
+  Projection2dGenerationError,
+  Projection2dInputError,
+} from "./api/projection-2d-bridge.ts";
 import { Build123dArtifactError } from "./artifacts.ts";
 import { ExportBasenameLengthError } from "./tools/execute.ts";
 
@@ -133,6 +137,25 @@ function classify(error: unknown): PublicToolFailure {
       message: "Assembly-integrity observation could not complete.",
       recovery:
         "Inspect the exact STEP bytes and the fixed observation method; retry only after either one changes.",
+      retryable: false,
+    };
+  }
+  if (error instanceof Projection2dInputError) {
+    return {
+      code: "projection_2d.input_invalid",
+      message: "2D projection input is invalid.",
+      recovery:
+        "Provide either one exact digest-bound padded-base64 model/step input or one current-process owned STEP resource descriptor; includeSection is the only optional projection control.",
+      retryable: false,
+    };
+  }
+  if (error instanceof Projection2dGenerationError) {
+    return {
+      code: "projection_2d.generation_failed",
+      message:
+        "The fixed 2D inspection projection could not produce a verified result.",
+      recovery:
+        "Check the qualified build123d runtime and submit a valid three-dimensional STEP artifact in a new request; no projection result was issued.",
       retryable: false,
     };
   }

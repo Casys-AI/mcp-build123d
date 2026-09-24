@@ -67,7 +67,19 @@ export {
   createAssemblyIntegrityTools,
 } from "./src/tools/assembly-integrity.ts";
 export type { CreateAssemblyIntegrityToolsOptions } from "./src/tools/assembly-integrity.ts";
-export { RESULTS_VIEWER_URI } from "./src/ui/constants.ts";
+export {
+  createProjection2dTools,
+  projection2dTools,
+  PROJECTION_2D_INPUT_SCHEMA,
+  PROJECTION_2D_OUTPUT_SCHEMA,
+  PROJECTION_2D_TOOL,
+} from "./src/tools/projection-2d.ts";
+export type { CreateProjection2dToolsOptions } from "./src/tools/projection-2d.ts";
+export {
+  ASSEMBLY_VIEWER_URI,
+  DRAWING_VIEWER_URI,
+  RESULTS_VIEWER_URI,
+} from "./src/ui/constants.ts";
 export {
   BUILD123D_CANONICAL_GEOMETRY_TOOL,
   BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA,
@@ -98,16 +110,52 @@ export type {
   ParseBuild123dViewerSession,
 } from "./src/ui/recorded-view-session.ts";
 export {
+  BUILD123D_ASSEMBLY_RESULT_SCHEMA,
+  BUILD123D_DRAWING_RESULT_SCHEMA,
+  BUILD123D_GEOMETRY_EXECUTION_RESULT_SCHEMA,
+  BUILD123D_GEOMETRY_EXPORT_RESULT_SCHEMA,
   BUILD123D_GEOMETRY_RESULT_SCHEMA,
   BUILD123D_MCP_APP_INFO,
   BUILD123D_VIEW_APP_MANIFEST,
   VIEW_APP_MANIFEST_SCHEMA,
 } from "./src/ui/view-app-manifest.ts";
 export type {
+  Build123dAssemblyViewAppResourceDeclaration,
+  Build123dDrawingViewAppResourceDeclaration,
+  Build123dGeometryViewAppResourceDeclaration,
   Build123dMcpAppInfo,
   Build123dViewAppManifest,
   Build123dViewAppResourceDeclaration,
 } from "./src/ui/view-app-manifest.ts";
+
+export {
+  DRAWING_PROJECTION_ENGINE,
+  DRAWING_PROJECTION_METHOD,
+  DRAWING_PROJECTION_REQUIRED_VIEW_IDS,
+  DRAWING_PROJECTION_SCHEMA,
+  DRAWING_PROJECTION_SECTION_VIEW_ID,
+  isSafeProjectionSvg,
+  parseDrawingProjection,
+  Projection2dGenerationError,
+  Projection2dInputError,
+  PROJECTION_2D_MAXIMUM_BASE64_CHARACTERS,
+  PROJECTION_2D_MAXIMUM_STEP_BYTES,
+  PROJECTION_2D_MAXIMUM_SVG_BYTES,
+  PROJECTION_2D_MAXIMUM_TOTAL_SVG_BYTES,
+  PROJECTION_2D_MAXIMUM_VIEWS,
+  PROJECTION_2D_TIMEOUT_MS,
+  projectStep2d,
+} from "./src/api/projection-2d-bridge.ts";
+export type {
+  DrawingProjection,
+  DrawingProjectionInput,
+  DrawingProjectionSourceStep,
+  DrawingProjectionStepResource,
+  DrawingProjectionSvg,
+  DrawingProjectionView,
+  DrawingProjectionViewId,
+  ProjectStep2dDependencies,
+} from "./src/api/projection-2d-bridge.ts";
 
 export {
   ASSEMBLY_INTEGRITY_MAXIMUM_BASE64_CHARACTERS,

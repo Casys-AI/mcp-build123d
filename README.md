@@ -25,6 +25,7 @@ agent writes build123d script
                                resources/read (rehashes bytes)
 
 exact STEP bytes or current-process casys:// STEP ──► build123d_observe_assembly_integrity ──► factual XCAF/OCCT assembly observation
+exact STEP bytes or current-process casys:// STEP ──► build123d_project_2d ──► fixed SVG inspection projections
 ```
 
 ![build123d_export result in the MCP App viewer](docs/assets/build123d-export-viewer.png)
@@ -51,6 +52,8 @@ At a glance:
   artifact, either inline or as a current-process owned `stepResource`; it never
   executes caller code and returns factual import, unit, topology, occurrence,
   placement and pair observations.
+- `build123d_project_2d` accepts the same two STEP delivery forms and returns
+  fixed orthographic, isometric and optional section SVGs for visual inspection.
 
 ## Why CAD-as-code for agents
 
@@ -282,21 +285,44 @@ source capture and compilation review followed by `compile.seal-admission@3`,
 canonical STEP authority. Keep those product-level authorities distinct from a
 direct call to this standalone server.
 
-## Tools and result viewer
+## Tools and viewers
 
-`build123d_execute` and `build123d_export` provide a compact geometry datasheet
-in compatible MCP Apps hosts. Inspect the model with orbit, pan, zoom, fit,
-reset, and wireframe controls. Open the details to inspect measured geometry,
-export artifacts, and exact provenance. Text responses remain available to every
-MCP client.
+The server registers three MCP App resources:
 
-The same viewer presents recorded Digital Thread geometry and provisional
-Project reviews, keeping their status visible and exact provenance accessible.
-It uses MCP View components that a Compose host can also mount individually:
-geometry, readings, status, or artifacts.
+| Resource                             | Tool results                                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `ui://mcp-build123d/results-viewer`  | `build123d_execute`, `build123d_export`, recorded Digital Thread geometry, and Project geometry reviews |
+| `ui://mcp-build123d/assembly-viewer` | `build123d_observe_assembly_integrity`                                                                  |
+| `ui://mcp-build123d/drawing-viewer`  | `build123d_project_2d`                                                                                  |
 
-See the [MCP App documentation](docs/mcp-app.md) for session contracts, resource
-transport, component composition, local builds, and screenshot capture.
+The geometry viewer presents the compact datasheet already used for direct and
+recorded results. Its Three.js scene supports orbit, pan, zoom, fit, reset,
+wireframe, visual section cuts, and an approximate two-point measurement on the
+displayed GLB mesh. The approximate measurement is an inspection aid; exact
+metrics remain the values calculated from the BREP by OCCT.
+
+The assembly viewer presents the fixed STEP observation: import and topology
+facts, direct occurrences, placements, and pair distances, contacts, and
+intersection volumes. The drawing viewer switches among the fixed top, front,
+right, and isometric SVG projections and, when requested and available, the
+fixed mid-envelope YZ section.
+
+All three viewers use the shared MCP View presentation and the exact
+`Powered by Casys.ai` footer from the ERPNext beta visual language. Compatible
+Compose hosts can still mount the geometry viewer's smaller status, readings,
+canvas, and artifact components. Text responses remain available to every MCP
+client.
+
+The 2D output is for visual inspection. It has no dimensions, tolerances,
+annotations, title block, or manufacturing approval, so it is not a
+manufacturing drawing. Individual 3D component selection and injection into the
+model context are also future work; current GLB results do not provide the
+stable occurrence identities required for that interaction.
+
+See the [viewer inventory](docs/viewer-inventory.md) for the exact surfaces,
+their ERPNext beta design reference, and the role of the local examples. The
+[MCP App documentation](docs/mcp-app.md) covers contracts, resource transport,
+component composition, local builds, and screenshot capture.
 
 ### Script and geometry contract
 
@@ -462,6 +488,38 @@ whose `OCP.__version__` is read by the fixed harness. It does not claim a
 Standard OCCT API build version, an image digest, or a sandbox/network policy
 attestation; the fixed method still describes the OCCT/XCAF observation.
 
+### `build123d_project_2d`
+
+Projects one exact STEP Part 21 artifact into a fixed set of SVG inspection
+views without executing caller code. Supply exactly one of the same closed
+`step` or current-process `stepResource` forms documented for
+`build123d_observe_assembly_integrity`. The only additional input is the
+optional fixed-section switch:
+
+```json
+{
+  "stepResource": {
+    "uri": "casys://build123d/artifacts/<lowercase-sha256>.step",
+    "mimeType": "model/step",
+    "sha256": "<lowercase-sha256>",
+    "bytes": 32536
+  },
+  "includeSection": true
+}
+```
+
+The fixed method returns top, front, right, and isometric projections. With
+`includeSection: true`, it also attempts a YZ section at the source envelope's
+midpoint on X; an empty section is omitted. The result binds the exact STEP
+identity, qualified build123d/OCP engine, fixed method, source envelope, and
+digest-checked SVG bytes for every view.
+
+The tool accepts no caller path, Python, camera, orientation, projection style,
+section plane, tolerance, or runtime choice. Its SVGs are visual inspection
+projections. They do not contain dimensions, tolerances, annotations, a title
+block, or a manufacturing verdict, and must not be treated as manufacturing
+drawings.
+
 ### Content and digest semantics
 
 - Each call runs the script once. `build123d_export` derives all requested
@@ -513,12 +571,15 @@ src/
     python-bridge.ts    # Deno side: subprocess, JSON over stdin/stdout
     assembly-integrity-harness.py # fixed OCCT/XCAF factual STEP observer
     assembly-integrity-bridge.ts  # digest-bound staging and receipt parser
+    projection-2d-harness.py # fixed OCCT STEP-to-SVG inspection projector
+    projection-2d-bridge.ts  # digest-bound staging and projection parser
   artifacts.ts          # process-local digest-bound export resources and handlers
   tool-errors.ts        # stable structured tool-error envelope
   tools/
     execute.ts          # execute and immutable artifact export
     assembly-integrity.ts # standalone factual assembly observation
-  ui/results-viewer/    # small CAD components and resource-backed GLB viewer
+    projection-2d.ts    # fixed STEP-to-SVG inspection projection
+  ui/results-viewer/    # geometry, assembly, and drawing viewer sources
   client.ts             # CadToolsClient
 tests/                  # contract, wire, viewer and real build123d tests
 ```

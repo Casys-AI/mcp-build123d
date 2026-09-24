@@ -9,7 +9,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "@std/assert";
-import { McpApp, SchemaValidator } from "@casys/mcp-server";
+import { McpApp, SchemaValidator } from "@casys/mcp-platform";
 import {
   BUILD123D_MAXIMUM_ARTIFACT_BYTES,
   Build123dArtifactError,
@@ -29,6 +29,10 @@ import {
   executeTools,
   geometryToolResult,
 } from "../src/tools/execute.ts";
+import {
+  BUILD123D_GEOMETRY_EXECUTION_RESULT_SCHEMA,
+  BUILD123D_GEOMETRY_EXPORT_RESULT_SCHEMA,
+} from "../src/ui/view-app-manifest.ts";
 
 /** A 10×20×5 mm box: 1,000 mm³, independently checkable by hand. */
 const BOX_SCRIPT = `
@@ -914,6 +918,14 @@ Deno.test("CAD schemas, annotations and artifact result contract stay coherent",
   });
   assertEquals(execute.inputSchema.additionalProperties, false);
   assertEquals(exported.inputSchema.additionalProperties, false);
+  assertEquals(
+    execute.outputSchema.$id,
+    BUILD123D_GEOMETRY_EXECUTION_RESULT_SCHEMA,
+  );
+  assertEquals(
+    exported.outputSchema.$id,
+    BUILD123D_GEOMETRY_EXPORT_RESULT_SCHEMA,
+  );
   const executeProperties = execute.inputSchema.properties as Record<
     string,
     { maximum?: number }

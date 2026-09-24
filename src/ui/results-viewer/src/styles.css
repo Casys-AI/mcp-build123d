@@ -33,8 +33,44 @@ body {
 }
 
 .geometry-scene-controls {
+  align-items: center;
   justify-content: flex-end;
   margin-bottom: 0.45rem;
+}
+
+.cad-axis-controls {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.cad-axis-button {
+  min-width: 28px;
+  padding-inline: 6px;
+}
+
+.cad-section-position {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  gap: 7px;
+  padding: 3px 8px;
+  border: 1px solid var(--mcp-view-border);
+  border-radius: var(--mcp-view-radius-control);
+  background: var(--mcp-view-panel);
+  color: var(--mcp-view-text-secondary);
+  font-size: var(--mcp-view-size-note);
+  font-weight: 500;
+}
+
+.cad-section-position input {
+  width: clamp(78px, 12vw, 128px);
+  margin: 0;
+  accent-color: var(--cad-accent);
+}
+
+.cad-section-position input:focus-visible {
+  outline: 2px solid var(--cad-accent);
+  outline-offset: 2px;
 }
 
 .geometry-artifacts {
@@ -58,10 +94,19 @@ body {
   touch-action: none;
 }
 
+.cad-viewport:focus-visible {
+  outline: 2px solid var(--cad-accent);
+  outline-offset: -3px;
+}
+
 .cad-viewport canvas {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.cad-viewport canvas[data-measurement="active"] {
+  cursor: crosshair;
 }
 
 .cad-reticle {
@@ -94,6 +139,29 @@ body {
   text-transform: uppercase;
 }
 
+.cad-inspection-hud {
+  position: absolute;
+  z-index: 3;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  display: grid;
+  max-width: min(76%, 30rem);
+  gap: 0.3rem;
+  pointer-events: none;
+  color: var(--mcp-view-text);
+  font: 600 0.7rem/1.3 var(--cad-mono);
+}
+
+.cad-inspection-hud span {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.32rem 0.48rem;
+  border: 1px solid var(--mcp-view-border);
+  border-radius: var(--mcp-view-radius-control);
+  background: color-mix(in srgb, var(--mcp-view-panel) 88%, transparent);
+  overflow-wrap: anywhere;
+}
+
 .cad-state-overlay {
   position: absolute;
   z-index: 4;
@@ -118,8 +186,21 @@ body {
 }
 
 @container build123d-view (max-width: 620px) {
+  .geometry-scene-controls {
+    justify-content: flex-start;
+  }
+
   .cad-stage {
     height: clamp(210px, 46vh, 340px);
+  }
+
+  .cad-section-position {
+    flex: 1 1 150px;
+  }
+
+  .cad-section-position input {
+    flex: 1;
+    width: auto;
   }
 }
 

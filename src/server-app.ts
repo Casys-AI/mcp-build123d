@@ -1,8 +1,8 @@
 /** Server assembly kept separate from the process bootstrap for wire tests. */
 
-import { McpApp, SchemaValidator } from "@casys/mcp-server";
+import { McpApp, SchemaValidator } from "@casys/mcp-platform";
 import { Build123dArtifactStore } from "./artifacts.ts";
-import { CadToolsClient } from "./client.ts";
+import { CadToolsClient, type MCPToolWireFormat } from "./client.ts";
 import {
   build123dFallbackToolErrorText,
   build123dInvalidArgumentsResult,
@@ -11,6 +11,11 @@ import {
 } from "./tool-errors.ts";
 import { registerBuild123dViewers, type ViewerFilesystem } from "./viewers.ts";
 import { MCP_BUILD123D_VERSION } from "./version.ts";
+import {
+  ASSEMBLY_VIEWER_URI,
+  DRAWING_VIEWER_URI,
+  RESULTS_VIEWER_URI,
+} from "./ui/constants.ts";
 
 export interface CreateCadMcpAppOptions {
   categories?: string[];
@@ -32,6 +37,27 @@ export interface CadMcpAppAssembly {
   viewers: { registered: string[]; skipped: string[] };
 }
 
+function registeredViewerResourceUris(
+  registered: readonly string[],
+): ReadonlySet<string> {
+  const names = new Set(registered);
+  return new Set([
+    ...(names.has("results-viewer") ? [RESULTS_VIEWER_URI] : []),
+    ...(names.has("assembly-viewer") ? [ASSEMBLY_VIEWER_URI] : []),
+    ...(names.has("drawing-viewer") ? [DRAWING_VIEWER_URI] : []),
+  ]);
+}
+
+function omitUnavailableViewerMeta(
+  tool: MCPToolWireFormat,
+  registeredResourceUris: ReadonlySet<string>,
+): MCPToolWireFormat {
+  const resourceUri = tool._meta?.ui?.resourceUri;
+  if (!resourceUri || registeredResourceUris.has(resourceUri)) return tool;
+  const { _meta: _unavailableViewer, ...textOnlyTool } = tool;
+  return textOnlyTool;
+}
+
 /** Create a fully wired build123d MCP application before it is started. */
 export function createCadMcpApp(
   options: CreateCadMcpAppOptions = {},
@@ -51,6 +77,8 @@ export function createCadMcpApp(
     instructions:
       "Use build123d_execute for exact OCCT geometry measurements and " +
       "build123d_export when a STEP, STL, or GLB delivery artifact is needed. " +
+      "Use build123d_observe_assembly_integrity for factual STEP assembly " +
+      "observations and build123d_project_2d for fixed SVG inspection views. " +
       "Every export result contains immutable digest-bound artifact URIs; read " +
       "only those URIs through resources/read and never construct a host path. " +
       "Scripts must assign the final Part, Solid, Compound, or BuildPart to " +
@@ -78,6 +106,14 @@ export function createCadMcpApp(
     exportDirectory: options.exportDirectory,
     resolveOwnedStep: (resource) => artifactStore.readOwnedStep(resource),
   });
+  const viewers = registerBuild123dViewers(
+    app,
+    options.viewerFilesystem,
+    options.viewerModuleUrl,
+  );
+  const registeredResourceUris = registeredViewerResourceUris(
+    viewers.registered,
+  );
 
   const handlers = toolsClient.buildHandlersMap();
   const inputValidator = new SchemaValidator();
@@ -96,12 +132,10 @@ export function createCadMcpApp(
         return build123dToolErrorResult(tool.name, error);
       }
     };
-    app.registerTool(tool, agentSafeHandler);
+    app.registerTool(
+      omitUnavailableViewerMeta(tool, registeredResourceUris),
+      agentSafeHandler,
+    );
   }
-  const viewers = registerBuild123dViewers(
-    app,
-    options.viewerFilesystem,
-    options.viewerModuleUrl,
-  );
   return { app, artifactStore, toolsClient, viewers };
 }

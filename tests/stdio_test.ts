@@ -343,6 +343,7 @@ Deno.test("server.ts --stdio ignores a preseeded digest object and forged receip
       "build123d_execute",
       "build123d_export",
       "build123d_observe_assembly_integrity",
+      "build123d_project_2d",
     ]);
     const exported = listed.find((tool) => tool.name === "build123d_export");
     assertEquals(
@@ -360,13 +361,19 @@ Deno.test("server.ts --stdio ignores a preseeded digest object and forged receip
       resources?.result,
       `missing resources/list: ${JSON.stringify(resources)}`,
     );
-    assertEquals(
+    const resourceUris = new Set(
       (resources.result.resources as Array<Record<string, unknown>>)
-        .some((resource) =>
-          resource.uri === "ui://mcp-build123d/results-viewer"
-        ),
-      true,
+        .map((resource) => resource.uri),
     );
+    for (
+      const viewerUri of [
+        "ui://mcp-build123d/results-viewer",
+        "ui://mcp-build123d/assembly-viewer",
+        "ui://mcp-build123d/drawing-viewer",
+      ]
+    ) {
+      assertEquals(resourceUris.has(viewerUri), true);
+    }
     const artifact =
       (resources.result.resources as Array<Record<string, unknown>>)
         .find((resource) => resource.uri === uri);

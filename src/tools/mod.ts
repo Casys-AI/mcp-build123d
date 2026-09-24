@@ -18,6 +18,14 @@ export {
   executeTools,
   type ExportArtifactPublisher,
 } from "./execute.ts";
+export {
+  createProjection2dTools,
+  type CreateProjection2dToolsOptions,
+  projection2dTools,
+  PROJECTION_2D_INPUT_SCHEMA,
+  PROJECTION_2D_OUTPUT_SCHEMA,
+  PROJECTION_2D_TOOL,
+} from "./projection-2d.ts";
 
 import {
   assemblyIntegrityTools,
@@ -28,6 +36,7 @@ import {
   type CreateExecuteToolsOptions,
   executeTools,
 } from "./execute.ts";
+import { createProjection2dTools, projection2dTools } from "./projection-2d.ts";
 import type { OwnedStepResolver } from "../artifacts.ts";
 import type { CadTool } from "./types.ts";
 
@@ -50,7 +59,10 @@ export function createCadToolCatalogue(
   const observation = createAssemblyIntegrityTools({
     resolveOwnedStep: options.resolveOwnedStep,
   });
-  const allTools = [...execution, ...observation];
+  const projection = createProjection2dTools({
+    resolveOwnedStep: options.resolveOwnedStep,
+  });
+  const allTools = [...execution, ...observation, ...projection];
   return {
     allTools,
     toolsByCategory: {
@@ -64,8 +76,10 @@ export function createCadToolCatalogue(
  * concrete artifact publisher; the process server installs one at assembly.
  */
 const defaultCatalogue: CadToolCatalogue = {
-  allTools: [...executeTools, ...assemblyIntegrityTools],
-  toolsByCategory: { execute: [...executeTools, ...assemblyIntegrityTools] },
+  allTools: [...executeTools, ...assemblyIntegrityTools, ...projection2dTools],
+  toolsByCategory: {
+    execute: [...executeTools, ...assemblyIntegrityTools, ...projection2dTools],
+  },
 };
 
 /** All CAD tools combined */
