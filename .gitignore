@@ -6,3 +6,4 @@ node_modules/
 .env.*
 !.env.example
 cad-exports/
+examples/inspector-demo/dist/

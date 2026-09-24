@@ -25,6 +25,7 @@ import {
   type Build123dRecordedGeometryProjection,
   loadBuild123dRecordedGltf,
 } from "../../recorded-view-session.ts";
+import { ViewerBrandFooter } from "../../shared/branding.tsx";
 import { decodeGltfArtifact, type ExportFile } from "./contract.ts";
 import {
   BUILD123D_COMPONENT_KEYS,
@@ -42,6 +43,13 @@ import {
   isGeometryReviewSession,
   isViewerSessionGeometryData,
 } from "./component-model.ts";
+import {
+  type CadMeasurement,
+  DEFAULT_SECTION_PLANE,
+  formatMillimetres,
+  type SectionAxis,
+  type SectionPlaneState,
+} from "./inspection-model.ts";
 import { type CadSceneController, mountCadScene } from "./scene.ts";
 import { geometryMessages } from "./locale.ts";
 
@@ -58,43 +66,46 @@ const GeometryDatasheet = ({ data, context }: Props) => {
   const identity = geometryIdentity(data, locale);
   const readings = geometryReadings(data, locale);
   return (
-    <FocusedView
-      className="geometry-datasheet"
-      label={identity.label}
-      hostContext={context.hostContext}
-      status={
-        <SemanticElement
-          reference={geometryReference(data)}
-          density="row"
-          ident={
-            <ElementIdent
-              marker={<Badge tone={identity.tone}>{identity.marker}</Badge>}
-              label={identity.label}
-              detail={identity.detail}
-            />
-          }
-        />
-      }
-      primary={
-        <>
-          <GeometryScene data={data} context={context} />
-          {readings.length > 0 && (
-            <MetricGrid className="geometry-readings" items={readings} />
-          )}
-        </>
-      }
-      detailsLabel={t("details")}
-      details={
-        <>
-          <FactSections sections={geometryFactSections(data, locale)} />
-          {!isViewerSessionGeometryData(data) && (
-            <ElementSection title={t("artifacts")}>
-              <Artifacts files={data.result.files} locale={locale} />
-            </ElementSection>
-          )}
-        </>
-      }
-    />
+    <>
+      <FocusedView
+        className="geometry-datasheet"
+        label={identity.label}
+        hostContext={context.hostContext}
+        status={
+          <SemanticElement
+            reference={geometryReference(data)}
+            density="row"
+            ident={
+              <ElementIdent
+                marker={<Badge tone={identity.tone}>{identity.marker}</Badge>}
+                label={identity.label}
+                detail={identity.detail}
+              />
+            }
+          />
+        }
+        primary={
+          <>
+            <GeometryScene data={data} context={context} />
+            {readings.length > 0 && (
+              <MetricGrid className="geometry-readings" items={readings} />
+            )}
+          </>
+        }
+        detailsLabel={t("details")}
+        details={
+          <>
+            <FactSections sections={geometryFactSections(data, locale)} />
+            {!isViewerSessionGeometryData(data) && (
+              <ElementSection title={t("artifacts")}>
+                <Artifacts files={data.result.files} locale={locale} />
+              </ElementSection>
+            )}
+          </>
+        }
+      />
+      <ViewerBrandFooter />
+    </>
   );
 };
 
@@ -258,6 +269,12 @@ const GeometryScene = ({ data, context }: SceneProps) => {
   const viewport = useRef<HTMLDivElement>(null);
   const controller = useRef<CadSceneController>();
   const [wireframe, setWireframe] = useState(false);
+  const [section, setSection] = useState<SectionPlaneState>(
+    DEFAULT_SECTION_PLANE,
+  );
+  const [sectionCoordinateMm, setSectionCoordinateMm] = useState<number>();
+  const [measurementEnabled, setMeasurementEnabled] = useState(false);
+  const [measurement, setMeasurement] = useState<CadMeasurement>();
   const [phase, setPhase] = useState<CanvasPhase>(() =>
     initialCanvasPhase(sessionProjection, gltf !== undefined, locale)
   );
@@ -267,6 +284,10 @@ const GeometryScene = ({ data, context }: SceneProps) => {
     controller.current?.dispose();
     controller.current = undefined;
     setWireframe(false);
+    setSection(DEFAULT_SECTION_PLANE);
+    setSectionCoordinateMm(undefined);
+    setMeasurementEnabled(false);
+    setMeasurement(undefined);
 
     if (!target || (!gltf && !sessionAvailable)) {
       setPhase(initialCanvasPhase(sessionProjection, false, locale));
@@ -299,12 +320,19 @@ const GeometryScene = ({ data, context }: SceneProps) => {
           resourceUri = gltf!.artifact.uri;
         }
         if (cancelled) return;
-        mounted = await mountCadScene(target, decodedBytes);
+        mounted = await mountCadScene(target, decodedBytes, {
+          onMeasurementChange(next) {
+            if (!cancelled) setMeasurement(next);
+          },
+        });
         if (cancelled) {
           mounted.dispose();
           return;
         }
         controller.current = mounted;
+        setSectionCoordinateMm(
+          mounted.setSectionPlane(DEFAULT_SECTION_PLANE).coordinateMm,
+        );
         setPhase({
           kind: "ready",
           meshes: mounted.meshes,
@@ -346,6 +374,34 @@ const GeometryScene = ({ data, context }: SceneProps) => {
     ? t("previewUnavailable")
     : t("noGeometry");
 
+  const applySection = (next: SectionPlaneState): void => {
+    // Mesh picks describe the currently rendered surface. A changed cut can
+    // hide either point, so discard the old overlay instead of leaving a
+    // plausible-looking line detached from visible geometry.
+    if (measurement) controller.current?.clearMeasurement();
+    setSection(next);
+    const definition = controller.current?.setSectionPlane(next);
+    if (definition) setSectionCoordinateMm(definition.coordinateMm);
+  };
+  const chooseSectionAxis = (axis: SectionAxis): void => {
+    applySection({ ...section, axis });
+  };
+  const toggleMeasurement = (): void => {
+    const next = !measurementEnabled;
+    if (!next && measurement?.pointsMm.length === 1) {
+      controller.current?.clearMeasurement();
+    }
+    controller.current?.setMeasurementEnabled(next);
+    setMeasurementEnabled(next);
+  };
+  const measurementStatus = measurement?.distanceMm !== undefined
+    ? t("meshDistance", {
+      distance: formatMillimetres(measurement.distanceMm, locale),
+    })
+    : measurement
+    ? t("pickSecondPoint")
+    : t("pickFirstPoint");
+
   return (
     <>
       <Toolbar className="geometry-scene-controls" label={t("controls")}>
@@ -373,6 +429,82 @@ const GeometryScene = ({ data, context }: SceneProps) => {
         >
           {t("wireframe")}
         </Button>
+        <Button
+          disabled={phase.kind !== "ready"}
+          pressed={section.enabled}
+          title={t("sectionHelp")}
+          onClick={() =>
+            applySection({ ...section, enabled: !section.enabled })}
+        >
+          {t("section")}
+        </Button>
+        {section.enabled && (
+          <>
+            <span
+              class="cad-axis-controls"
+              role="group"
+              aria-label={t("sectionAxis")}
+            >
+              {(["x", "y", "z"] as const).map((axis) => (
+                <Button
+                  className="cad-axis-button"
+                  disabled={phase.kind !== "ready"}
+                  key={axis}
+                  pressed={section.axis === axis}
+                  title={t("sectionAxisChoice", { axis: axis.toUpperCase() })}
+                  onClick={() => chooseSectionAxis(axis)}
+                >
+                  {axis.toUpperCase()}
+                </Button>
+              ))}
+            </span>
+            <label class="cad-section-position">
+              <span>{t("sectionPosition")}</span>
+              <input
+                aria-label={t("sectionPosition")}
+                aria-valuetext={sectionCoordinateMm === undefined
+                  ? undefined
+                  : `${formatMillimetres(sectionCoordinateMm, locale)} mm`}
+                disabled={phase.kind !== "ready"}
+                max="1"
+                min="0"
+                step="0.01"
+                type="range"
+                value={section.position}
+                onInput={(event) =>
+                  applySection({
+                    ...section,
+                    position: Number(event.currentTarget.value),
+                  })}
+              />
+            </label>
+            <Button
+              disabled={phase.kind !== "ready"}
+              pressed={section.flipped}
+              title={t("flipSectionHelp")}
+              onClick={() =>
+                applySection({ ...section, flipped: !section.flipped })}
+            >
+              {t("flipSection")}
+            </Button>
+          </>
+        )}
+        <Button
+          disabled={phase.kind !== "ready"}
+          pressed={measurementEnabled}
+          title={t("measurementHelp")}
+          onClick={toggleMeasurement}
+        >
+          {t("measure")}
+        </Button>
+        {measurement && (
+          <Button
+            disabled={phase.kind !== "ready"}
+            onClick={() => controller.current?.clearMeasurement()}
+          >
+            {t("clearMeasurement")}
+          </Button>
+        )}
       </Toolbar>
       <Slot3D
         label={canonicalSession
@@ -387,7 +519,21 @@ const GeometryScene = ({ data, context }: SceneProps) => {
             ref={viewport}
             class="cad-viewport"
             role="img"
-            aria-label={status}
+            aria-keyshortcuts={measurementEnabled ? "Enter Space" : undefined}
+            aria-label={measurementEnabled
+              ? `${status}. ${measurementStatus} ${
+                t("measurementKeyboardHint")
+              }`
+              : status}
+            tabIndex={measurementEnabled ? 0 : undefined}
+            onKeyDown={(event) => {
+              if (
+                !measurementEnabled ||
+                (event.key !== "Enter" && event.key !== " ")
+              ) return;
+              event.preventDefault();
+              controller.current?.pickMeasurementAtCenter();
+            }}
           />
           <div class="cad-reticle" aria-hidden="true" />
           {phase.kind === "ready" && (
@@ -401,6 +547,25 @@ const GeometryScene = ({ data, context }: SceneProps) => {
                 {formatCount(phase.nodes, locale)}{" "}
                 {t(phase.nodes === 1 ? "node" : "nodes")}
               </span>
+            </div>
+          )}
+          {phase.kind === "ready" &&
+            (section.enabled || measurementEnabled || measurement) && (
+            <div class="cad-inspection-hud" aria-live="polite">
+              {section.enabled && sectionCoordinateMm !== undefined && (
+                <span>
+                  {t("sectionSummary", {
+                    axis: section.axis.toUpperCase(),
+                    position: formatMillimetres(sectionCoordinateMm, locale),
+                    side: `${
+                      section.flipped ? "−" : "+"
+                    }${section.axis.toUpperCase()}`,
+                  })}
+                </span>
+              )}
+              {(measurementEnabled || measurement) && (
+                <span>{measurementStatus}</span>
+              )}
             </div>
           )}
           {phase.kind !== "ready" && (
@@ -463,7 +628,7 @@ export const BUILD123D_COMPONENT_REGISTRY = defineComponentRegistry<
       {
         title: "Interactive geometry",
         description:
-          "Interactive verified GLB resource canvas with orbit, pan and inspection.",
+          "Interactive verified GLB resource canvas with orbit, pan, visual sectioning and approximate two-point mesh measurement.",
       },
       GeometryCanvas,
     ),

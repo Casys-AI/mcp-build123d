@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-build123d",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "tasks": {
     "serve": "deno run --allow-all server.ts --port=3014",
     "serve:stdio": "deno run --allow-all server.ts --stdio",
@@ -9,11 +9,16 @@
     "build:ui": "deno run --allow-env --allow-net --allow-read --allow-run --allow-write scripts/build-results-viewer.ts",
     "capture:docs": "deno run --allow-env --allow-net=127.0.0.1 --allow-read --allow-run --allow-write scripts/capture-viewer-doc.ts",
     "generate:harness-source": "deno run --allow-read --allow-write scripts/generate-harness-source.ts && deno fmt src/api/harness-source.ts",
-    "generate:assembly-integrity-harness-source": "deno run --allow-read --allow-write scripts/generate-assembly-integrity-harness-source.ts && deno fmt src/api/assembly-integrity-harness-source.ts"
+    "generate:assembly-integrity-harness-source": "deno run --allow-read --allow-write scripts/generate-assembly-integrity-harness-source.ts && deno fmt src/api/assembly-integrity-harness-source.ts",
+    "generate:projection-2d-harness-source": "deno run --allow-read --allow-write scripts/generate-projection-2d-harness-source.ts && deno fmt src/api/projection-2d-harness-source.ts"
   },
   "fmt": {
     "exclude": [
-      "src/ui/dist/"
+      "src/ui/dist/",
+      "examples/inspector-demo/dist/",
+      "examples/inspector-demo/assembly/tps03.json",
+      "examples/inspector-demo/assembly/msm01.json",
+      "examples/inspector-demo/drawing/*.svg"
     ]
   },
   "exports": {
@@ -34,6 +39,7 @@
       "src/ui/dist/**/*.html",
       "src/api/harness.py",
       "src/api/assembly-integrity-harness.py",
+      "src/api/projection-2d-harness.py",
       "requirements/**/*.txt",
       "docs/**/*.md",
       "docs/assets/**/*.png",
@@ -58,7 +64,7 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@0.26.1",
+    "@casys/mcp-platform": "jsr:@casys/mcp-platform@0.28.1",
     "@casys/mcp-view-contracts": "jsr:@casys/mcp-view-contracts@0.1.0",
     "@casys/mcp-view-components": "jsr:@casys/mcp-view-components@0.9.0",
     "ajv": "npm:ajv@^8.17.1",

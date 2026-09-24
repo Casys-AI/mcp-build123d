@@ -1,4 +1,8 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import {
+  assertAlmostEquals,
+  assertEquals,
+  assertStringIncludes,
+} from "@std/assert";
 import {
   BUILD123D_CANONICAL_GEOMETRY_TOOL,
   BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
@@ -27,6 +31,12 @@ import {
   SESSION_REJECTED_CODE,
   TOOL_ERROR_CODE,
 } from "../src/ui/results-viewer/src/projection.ts";
+import {
+  appendMeasurementPoint,
+  formatMillimetres,
+  GLTF_METRES_TO_MILLIMETRES,
+  sectionPlaneDefinition,
+} from "../src/ui/results-viewer/src/inspection-model.ts";
 
 const METRICS = {
   volume_mm3: 1000,
@@ -318,6 +328,62 @@ Deno.test("results viewer formats numbers for the host locale, never the machine
   assertEquals(formatBytes(77_000, "en-US"), "75.2 KB");
   assertEquals(formatBytes(77_000, "de-DE"), "75,2 KB");
   assertEquals(formatBytes(3 * 1024 * 1024, "en-US"), "3.0 MB");
+});
+
+Deno.test("3D section planes use stable full-model bounds and either retained side", () => {
+  const bounds = {
+    min: [-0.03, -0.02, -0.0025] as const,
+    max: [0.03, 0.02, 0.0275] as const,
+  };
+  const positive = sectionPlaneDefinition(bounds, {
+    enabled: true,
+    axis: "x",
+    position: 0.25,
+    flipped: false,
+  });
+  assertEquals(positive.normal, [1, 0, 0]);
+  assertAlmostEquals(positive.constant, 0.015);
+  assertAlmostEquals(positive.coordinateMm, -15);
+
+  const negative = sectionPlaneDefinition(bounds, {
+    enabled: true,
+    axis: "x",
+    position: 0.25,
+    flipped: true,
+  });
+  assertEquals(negative.normal, [-1, 0, 0]);
+  assertAlmostEquals(negative.constant, -0.015);
+  assertAlmostEquals(negative.coordinateMm, -15);
+
+  const clamped = sectionPlaneDefinition(bounds, {
+    enabled: true,
+    axis: "y",
+    position: 2,
+    flipped: false,
+  });
+  assertAlmostEquals(clamped.coordinateMm, 20);
+  const centered = sectionPlaneDefinition(bounds, {
+    enabled: true,
+    axis: "z",
+    position: Number.NaN,
+    flipped: false,
+  });
+  assertAlmostEquals(centered.coordinateMm, 12.5);
+});
+
+Deno.test("3D point measurement converts glTF metres to mm and restarts on a third pick", () => {
+  assertEquals(GLTF_METRES_TO_MILLIMETRES, 1_000);
+  const first = appendMeasurementPoint(undefined, [0.001, 0.002, 0.003]);
+  assertEquals(first, { pointsMm: [[1, 2, 3]] });
+  const complete = appendMeasurementPoint(first, [0.004, 0.006, 0.003]);
+  assertEquals(complete.pointsMm, [[1, 2, 3], [4, 6, 3]]);
+  assertAlmostEquals(complete.distanceMm!, 5);
+  assertEquals(formatMillimetres(12.345, "en-US"), "12.345");
+  assertEquals(formatMillimetres(12.345, "fr-FR"), "12,345");
+  assertEquals(formatMillimetres(-0.0001, "en-US"), "0");
+
+  const restarted = appendMeasurementPoint(complete, [0.01, 0, 0]);
+  assertEquals(restarted, { pointsMm: [[10, 0, 0]] });
 });
 
 function resolveLabel(

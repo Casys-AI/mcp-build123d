@@ -6,10 +6,10 @@
  * have been built. This keeps text-only MCP clients fully usable.
  */
 
-import type { McpApp } from "@casys/mcp-server";
+import type { McpApp } from "@casys/mcp-platform";
 
 const MODULE_URL = new URL("..", import.meta.url).href;
-const VIEWERS = ["results-viewer"];
+const VIEWERS = ["results-viewer", "assembly-viewer", "drawing-viewer"];
 
 function isRemoteUrl(path: string): boolean {
   return path.startsWith("https://") || path.startsWith("http://");
@@ -21,7 +21,7 @@ export interface ViewerFilesystem {
 }
 
 const VIEWER_READ_FAILURE =
-  "The build123d results viewer could not be read by the server.";
+  "The requested build123d viewer could not be read by the server.";
 
 const localFilesystem: ViewerFilesystem = {
   exists: (path) => {
@@ -60,7 +60,7 @@ export function registerBuild123dViewers(
         return await filesystem.readFile(path);
       } catch (error) {
         console.error(
-          `[mcp-build123d] results viewer read failure: ${
+          `[mcp-build123d] viewer read failure: ${
             error instanceof Error ? error.message : String(error)
           }`,
         );

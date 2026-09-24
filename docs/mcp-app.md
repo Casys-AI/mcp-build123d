@@ -1,34 +1,50 @@
-# MCP App viewer
+# MCP App viewers
 
-The Build123d viewer renders geometry results, recorded Digital Thread geometry,
-and Project geometry reviews. Its presentation comes from MCP View components;
-Build123d owns the geometry projection, resource validation, and Three.js scene.
+Build123d registers three viewer resources for geometry, factual assembly
+observation, and fixed 2D inspection projections. Their presentation comes from
+MCP View components; Build123d owns each result projection, resource validation,
+and the CAD-specific Three.js or SVG rendering. See the
+[viewer inventory](viewer-inventory.md) for the complete surface list, the role
+of the local examples, and the ERPNext beta implementation comparison.
 
 ## Resource and manifest
 
-`build123d_execute` and `build123d_export` expose the optional resource
-`ui://mcp-build123d/results-viewer`. The committed standalone HTML lives at
-`src/ui/dist/results-viewer/index.html`. If that bundle is absent, the server
-skips resource registration and keeps the text response available.
+Each committed standalone HTML bundle lives under `src/ui/dist/`. If a bundle is
+absent, the server skips that resource registration and keeps the tool's text
+response available.
 
-`BUILD123D_VIEW_APP_MANIFEST` declares this resource with
+| Resource                             | Bundle                       | Bound input                                                             |
+| ------------------------------------ | ---------------------------- | ----------------------------------------------------------------------- |
+| `ui://mcp-build123d/results-viewer`  | `results-viewer/index.html`  | `build123d_execute`, `build123d_export`, and recorded geometry sessions |
+| `ui://mcp-build123d/assembly-viewer` | `assembly-viewer/index.html` | `build123d_observe_assembly_integrity`                                  |
+| `ui://mcp-build123d/drawing-viewer`  | `drawing-viewer/index.html`  | `build123d_project_2d`                                                  |
+
+`BUILD123D_VIEW_APP_MANIFEST` declares all three resources with
 `ownership: "whole-view"`. Hosts can read the serialized manifest from the
 package's `./view-app-manifest` export. The MCP Apps handshake announces the
 manifest App id, `io.casys.mcp-build123d.results`, and the package version.
 
 | Input                       | Contract identity                                      | Delivery               |
 | --------------------------- | ------------------------------------------------------ | ---------------------- |
-| Execution or export result  | `io.casys.mcp-build123d.geometry-result/1.0`           | MCP tool result        |
+| Execution result            | `io.casys.mcp-build123d.geometry-execution-result/1.0` | MCP tool result        |
+| Export result               | `io.casys.mcp-build123d.geometry-export-result/1.0`    | MCP tool result        |
+| Assembly observation        | `build123d-assembly-integrity-observation/1.0`         | MCP tool result        |
+| 2D inspection projection    | `io.casys.mcp-build123d.drawing-projection/1.0`        | MCP tool result        |
 | Recorded canonical geometry | `io.casys.mcp-build123d.recorded-geometry-session/1.0` | `viewer.session.apply` |
 | Project geometry review     | `io.casys.mcp-build123d.geometry-review-session/1.0`   | `viewer.session.apply` |
 
-The result contract name maps to the top-level
-`GeometryStructuredContent.schemaVersion: "1.0"` union, discriminated by
-`kind: "execution" | "export"`. The nested `build123d-export-artifact/1.0`
-schema identifies an immutable artifact, not a complete result envelope. Session
-schemas contain no endpoint, credential, tool argument, or host-routing policy.
+The two geometry contract identities are the exact `$id` values of the tool
+output schemas. Their wire payloads preserve
+`GeometryStructuredContent.schemaVersion: "1.0"`; `kind: "execution" |
+"export"`
+selects the matching schema. The older
+`io.casys.mcp-build123d.geometry-result/1.0` name remains a historical union
+alias and is not advertised by the manifest. The nested
+`build123d-export-artifact/1.0` schema identifies an immutable artifact, not a
+complete result envelope. Session schemas contain no endpoint, credential, tool
+argument, or host-routing policy.
 
-## Direct tool results
+## Geometry tool results
 
 The versioned structured result includes geometry metrics and artifact
 references. It does not include the submitted script or file contents. An export
@@ -41,6 +57,40 @@ MCP `resources/read`. The server rehashes its issued in-memory byte copy before
 returning it. The App then validates the GLB header and digest before mounting
 the scene. This direct-result path uses the server's process-local artifact
 store.
+
+## Assembly observation results
+
+`build123d_observe_assembly_integrity` is bound to the assembly viewer. Its
+`build123d-assembly-integrity-observation/1.0` payload carries the exact STEP
+identity, fixed method and engine, importability and topology facts, direct
+occurrences and placements, and all bounded direct-occurrence pair observations.
+The viewer preserves unresolved and unavailable statuses and does not infer a
+fit, motion, strength, safety, or acceptance verdict.
+
+The viewer keeps exact STEP occurrence labels as technical identities. It shows
+readable labels directly, assigns localized aliases to UUID or digest labels,
+and may consume a complete display-name map from presentation-only result
+metadata when that map is bound to the same STEP SHA-256. This metadata changes
+only the names shown; pair joins and observation facts continue to use the exact
+STEP labels.
+
+The v1 viewer accepts schema-compatible observations produced from package
+version 0.6.3 through its own version and preserves the literal producer version
+as provenance. The live tool output schema remains pinned to the running package
+version.
+
+## 2D inspection projection results
+
+`build123d_project_2d` is bound to the drawing viewer. Its
+`io.casys.mcp-build123d.drawing-projection/1.0` payload binds the exact STEP
+identity, qualified engine, fixed projection method, source envelope, and each
+digest-checked inline SVG. The viewer offers fixed top, front, right, and
+isometric views plus the optional fixed mid-envelope YZ section when that
+section is not empty.
+
+The result contains visual inspection projections. It has no dimensions,
+tolerances, annotations, title block, drawing-standard claim, or manufacturing
+approval and is not a manufacturing drawing.
 
 ## Recorded viewer sessions
 
@@ -106,12 +156,13 @@ process-local artifact-store lookup, and does not require `allow-same-origin`.
 
 ## Compose components
 
-The App advertises independently mountable components during `ui/initialize`.
-For direct tool results, a Compose host can choose the component subset, order,
-grid, and gap. Without a requested surface, the default is one geometry
-datasheet. Recorded sessions always mount that same datasheet. The model and
-literal status stay visible; the keyboard-accessible details disclosure starts
-closed and retains every recorded identity, fingerprint, and producer field.
+The geometry App advertises independently mountable components during
+`ui/initialize`. For direct tool results, a Compose host can choose the
+component subset, order, grid, and gap. Without a requested surface, the default
+is one geometry datasheet. Recorded sessions always mount that same datasheet.
+The model and literal status stay visible; the keyboard-accessible details
+disclosure starts closed and retains every recorded identity, fingerprint, and
+producer field.
 
 | Component key                  | Presentation                                                                                            |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
@@ -121,44 +172,65 @@ closed and retains every recorded identity, fingerprint, and producer field.
 | `build123d.geometry-canvas`    | Verified GLB resource and interactive Three.js scene                                                    |
 | `build123d.export-artifacts`   | Resource URIs, digests, MIME types, byte sizes; session basis and capture provenance                    |
 
+The two additional Apps each advertise one whole-view component:
+
+| Component key                  | Presentation                                                                                             |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `build123d.assembly-datasheet` | Assembly identity, topology metrics, occurrences, pair observations, and exact source and method details |
+| `build123d.drawing-datasheet`  | Selectable fixed SVG views, source envelope, and exact source, engine, method, and SVG identities        |
+
 Each is a Preact component built with the optional `@casys/mcp-view-components`
 package: `FocusedView` with its native `Disclosure`, `SemanticElement` and its
-ident and section slots, `MetricGrid`, `KeyValueList`, `ArtifactRow`, `Slot3D`,
-`Card`, `Badge`, `Button`, `Toolbar`, and system states. The entry point uses
-`startPreactSurfaceApp`; the lifecycle/router is provided by renderer-neutral
-`@casys/mcp-view`. Local styles cover the Three.js viewport and CAD layout.
-Interface labels use the shared `createTranslator` helper with provider-owned
-English and French dictionaries. Numbers follow the host `locale`; recorded
-states, identifiers, units, and diagnostic messages remain exact.
+ident and section slots, `MetricGrid`, `KeyValueList`, `DataTable`,
+`ArtifactRow`, `Slot3D`, `Card`, `Badge`, `Button`, `Toolbar`, and system
+states. The entry points use `startPreactSurfaceApp`; the lifecycle/router is
+provided by renderer-neutral `@casys/mcp-view`. Local styles cover the Three.js
+viewport and CAD-specific 2D and 3D layout. Interface labels use the shared
+`createTranslator` helper with provider-owned English and French dictionaries.
+Numbers follow the host `locale`; recorded states, identifiers, units, and
+diagnostic messages remain exact.
+
+Every default datasheet ends with the shared `Powered by Casys.ai` footer and
+Casys link. This credit matches the ERPNext beta visual language without copying
+its application-specific business components.
 
 The scene follows the host theme at initialization and on subsequent
 `ui/notifications/host-context-changed` notifications. With
 `themeUpdates: "in-place"`, a theme-only update changes the canvas, fog, grid,
 and overlay palette without remounting the canvas, reading the GLB again, or
-resetting its camera and wireframe state. Other host-context changes retain the
-shared surface lifecycle.
+resetting its camera, wireframe, section, or measurement state. Other
+host-context changes retain the shared surface lifecycle.
+
+The 3D toolbar adds an axis-selectable clipping plane with position and flip
+controls. Measurement mode raycasts two points on the rendered GLB mesh and
+shows their straight-line distance. The value is explicitly approximate because
+it comes from tessellated display geometry; exact dimensions and metrics must
+come from an appropriate OCCT/BREP operation.
 
 Repeated canvas instances have independent controls and Three.js cleanup. No
-component-level semantic Compose event is emitted or accepted: the result
-contract does not provide stable feature, face, or instance identifiers.
-`viewer.session.apply` replaces the whole App read model and is a resource-level
-action, not a component interaction event.
+component-level semantic Compose or model-context event is emitted or accepted:
+the result contract does not provide stable feature, face, or occurrence
+identifiers. Clicking a displayed component therefore does not add it to model
+context. That future interaction first needs an occurrence-aware export and a
+stable mapping from the STEP occurrence to the GLB node. `viewer.session.apply`
+replaces the whole geometry App read model and is a resource-level action, not a
+component interaction event.
 
 The GLB viewer has a 24 MiB local cap; resource identity and retrieval remain
 available separately for larger artifacts. A compound export remains an
 aggregate shape. Its resource identity establishes exact bytes, not assembly,
 motion, fit, or requirement semantics.
 
-## Build the viewer
+## Build the viewers
 
-The committed bundle uses `@casys/mcp-view@0.9.3` and
-`@casys/mcp-view-components@0.9.0`, built from `Casys-AI/mcp-server` commit
+The committed bundles use `@casys/mcp-view@0.9.3` and
+`@casys/mcp-view-components@0.9.0`, built from `Casys-AI/mcp-platform` commit
 `b08802df353bb25d25a1c8d64b22ea61b5287ae0`. Use that checkout for both module
 entries:
 
 ```bash
-MCP_VIEW_MODULE=file:///absolute/path/to/mcp-server/packages/view/mod.ts \
-MCP_VIEW_COMPONENTS_MODULE=file:///absolute/path/to/mcp-server/packages/view-components/mod.ts \
+MCP_VIEW_MODULE=file:///absolute/path/to/mcp-platform/packages/view/mod.ts \
+MCP_VIEW_COMPONENTS_MODULE=file:///absolute/path/to/mcp-platform/packages/view-components/mod.ts \
   deno task build:ui
 ```
 
@@ -168,18 +240,18 @@ entries are derived from those paths; `MCP_VIEW_COMPONENTS_PREACT_MODULE` and
 differs. Deno's dependency-age quarantine applies to the rest of the graph, with
 exceptions for the Casys view packages.
 
-The viewer build uses exact npm dependency pins and its committed
-`src/ui/results-viewer/deno.lock` in frozen mode. The publication workflow
-rebuilds against the same audited kit commit and rejects drift in
-`src/ui/dist/`.
+The viewer build produces the results, assembly, and drawing bundles with exact
+npm dependency pins and its committed `src/ui/results-viewer/deno.lock` in
+frozen mode. The publication workflow rebuilds against the same audited kit
+commit and rejects drift in `src/ui/dist/`.
 
-The generated HTML bundles its dependencies. At runtime it accepts the result
-and session contracts above. Direct export GLBs arrive through MCP
-`resources/read`; recorded-session GLBs arrive through the host resource bridge.
-The viewer never executes the submitted Python. Generated `src/ui/dist/` is
+Each generated HTML bundle includes its dependencies. At runtime the Apps accept
+only the result and session contracts above. Direct export GLBs arrive through
+MCP `resources/read`; recorded-session GLBs arrive through the host resource
+bridge. The viewers never execute submitted Python. Generated `src/ui/dist/` is
 excluded from Deno source formatting; viewer source remains covered.
 
-## Capture the viewer
+## Capture the viewers
 
 From a source checkout, `deno task capture:docs` renders the committed bundle
 through `scripts/capture-viewer-doc.ts` with the real export fixture
@@ -190,4 +262,6 @@ elsewhere.
 
 The [README screenshot](assets/build123d-export-viewer.png) shows that direct
 export flow. A recorded-session capture must exercise the separate host resource
-bridge described above.
+bridge described above. The local Inspector example server captures the assembly
+and drawing surfaces with saved Digital Thread-derived fixtures; those captures
+exercise the UI and are not fresh CAD tool calls.

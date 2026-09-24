@@ -1,7 +1,7 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@casys/mcp-server@0.26.1": "0.26.1",
+    "jsr:@casys/mcp-platform@0.28.1": "0.28.1",
     "jsr:@casys/mcp-view-components@0.9.0": "0.9.0",
     "jsr:@casys/mcp-view-contracts@0.1": "0.1.0",
     "jsr:@casys/mcp-view-contracts@0.1.0": "0.1.0",
@@ -13,23 +13,25 @@
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.6",
+    "jsr:@std/path@1.1.4": "1.1.4",
     "jsr:@std/path@^1.0.6": "1.1.6",
     "jsr:@std/yaml@1": "1.2.0",
-    "npm:@modelcontextprotocol/ext-apps@^1.7.4": "1.7.5_@modelcontextprotocol+sdk@1.30.0__zod@4.4.3_zod@4.4.3",
-    "npm:@modelcontextprotocol/sdk@^1.29.0": "1.30.0_zod@4.4.3",
+    "npm:@modelcontextprotocol/ext-apps@^1.7.4": "1.7.5_@modelcontextprotocol+sdk@1.30.0__zod@4.5.4_zod@4.5.4",
+    "npm:@modelcontextprotocol/sdk@^1.29.0": "1.30.0_zod@4.5.4",
     "npm:@modelcontextprotocol/server@2": "2.0.0",
     "npm:@opentelemetry/api@^1.9.0": "1.9.1",
     "npm:ajv@^8.17.1": "8.20.0",
     "npm:esbuild@0.24": "0.24.2",
     "npm:hono@4": "4.13.5",
-    "npm:jose@6": "6.2.10"
+    "npm:jose@6": "6.2.10",
+    "npm:preact@^10.28.3": "10.29.8",
+    "npm:three@0.172.0": "0.172.0"
   },
   "jsr": {
-    "@casys/mcp-server@0.26.1": {
-      "integrity": "c064c8574aec6231cdbb548c302c9090cd174e34158b98bbbe60bd18683d7b09",
+    "@casys/mcp-platform@0.28.1": {
+      "integrity": "9a59c7e4b27b1a4985c166ed19170bbce80abcab73324ddb9122f3f600d731cc",
       "dependencies": [
         "jsr:@std/yaml",
-        "npm:@modelcontextprotocol/ext-apps",
         "npm:@modelcontextprotocol/sdk",
         "npm:@modelcontextprotocol/server",
         "npm:@opentelemetry/api",
@@ -50,7 +52,8 @@
       "integrity": "7f873b1f6359e288ae6b5f67bbdd83a671460323ad3f120c42e204b85b75c1fc",
       "dependencies": [
         "jsr:@casys/mcp-view",
-        "jsr:@casys/mcp-view-contracts@0.1"
+        "jsr:@casys/mcp-view-contracts@0.1",
+        "npm:preact"
       ]
     },
     "@casys/mcp-view-contracts@0.1.0": {
@@ -78,6 +81,12 @@
     },
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@std/path@1.1.4": {
+      "integrity": "1d2d43f39efb1b42f0b1882a25486647cb851481862dc7313390b2bb044314b5",
+      "dependencies": [
+        "jsr:@std/internal@^1.0.12"
+      ]
     },
     "@std/path@1.1.6": {
       "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
@@ -227,7 +236,7 @@
         "zod"
       ]
     },
-    "@modelcontextprotocol/ext-apps@1.7.5_@modelcontextprotocol+sdk@1.30.0__zod@4.4.3_zod@4.4.3": {
+    "@modelcontextprotocol/ext-apps@1.7.5_@modelcontextprotocol+sdk@1.30.0__zod@4.5.4_zod@4.5.4": {
       "integrity": "sha512-TjPH2S2y5UEGKhmI6+XGFuqfqOV4ppe1x6DA3txnUaEWkgtA4G5vo14jGKFZmegdkZ1H4QMLyujLvoU1BEdnAg==",
       "dependencies": [
         "@modelcontextprotocol/sdk",
@@ -235,7 +244,7 @@
         "zod"
       ]
     },
-    "@modelcontextprotocol/sdk@1.30.0_zod@4.4.3": {
+    "@modelcontextprotocol/sdk@1.30.0_zod@4.5.4": {
       "integrity": "sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==",
       "dependencies": [
         "@hono/node-server",
@@ -438,8 +447,8 @@
         "eventsource-parser"
       ]
     },
-    "express-rate-limit@8.6.2_express@5.2.1": {
-      "integrity": "sha512-YH4ru+eOJxQABscKFfRCy9R7x9QFGdezclVMwwgFFndzS2Xnm0uo6B0ABZsLhcpeptGv2qvuJVWlQr9gQZoC3A==",
+    "express-rate-limit@8.7.0_express@5.2.1": {
+      "integrity": "sha512-hOwV7WOxXfjRpAM1DSJWZDXx3GhplwD8IfwuwvogD8i1Qnkgosw/H45s4ZnFAUHDAhPjlY9hLBvJhKmGMyY26g==",
       "dependencies": [
         "debug",
         "express",
@@ -561,8 +570,8 @@
     "inherits@2.0.4": {
       "integrity": "sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ=="
     },
-    "ip-address@10.5.0": {
-      "integrity": "sha512-R5SnVLJmgYYvf2F2ZgwSBnelz5G4q5AxIC277GDfUaNbrZKNANcBC7RHqYYePlszf4kBolVkJauG0ZjHHFh55g=="
+    "ip-address@10.7.0": {
+      "integrity": "sha512-BGFsyJd5mpXp3rK6jIdADLNgpJUK1jnjzvYF8lK+VyDab9JAmqN0YOKDdP17HlgKb2+ehPgDc8EtnRLbGCAMhA=="
     },
     "ipaddr.js@1.9.1": {
       "integrity": "sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g=="
@@ -639,6 +648,9 @@
     "pkce-challenge@5.0.1": {
       "integrity": "sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ=="
     },
+    "preact@10.29.8": {
+      "integrity": "sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q=="
+    },
     "proxy-addr@2.0.7": {
       "integrity": "sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==",
       "dependencies": [
@@ -646,8 +658,8 @@
         "ipaddr.js"
       ]
     },
-    "qs@6.15.3": {
-      "integrity": "sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==",
+    "qs@6.16.0": {
+      "integrity": "sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==",
       "dependencies": [
         "es-define-property",
         "side-channel"
@@ -757,6 +769,9 @@
     "statuses@2.0.2": {
       "integrity": "sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw=="
     },
+    "three@0.172.0": {
+      "integrity": "sha512-6HMgMlzU97MsV7D/tY8Va38b83kz8YJX+BefKjspMNAv0Vx6dxMogHOrnRl/sbMIs3BPUKijPqDqJ/+UwJbIow=="
+    },
     "toidentifier@1.0.1": {
       "integrity": "sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA=="
     },
@@ -784,19 +799,19 @@
     "wrappy@1.0.2": {
       "integrity": "sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ=="
     },
-    "zod-to-json-schema@3.25.2_zod@4.4.3": {
+    "zod-to-json-schema@3.25.2_zod@4.5.4": {
       "integrity": "sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==",
       "dependencies": [
         "zod"
       ]
     },
-    "zod@4.4.3": {
-      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
+    "zod@4.5.4": {
+      "integrity": "sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA=="
     }
   },
   "workspace": {
     "dependencies": [
-      "jsr:@casys/mcp-server@0.26.1",
+      "jsr:@casys/mcp-platform@0.28.1",
       "jsr:@casys/mcp-view-components@0.9.0",
       "jsr:@casys/mcp-view-contracts@0.1.0",
       "jsr:@std/assert@1",

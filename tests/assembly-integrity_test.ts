@@ -6,7 +6,7 @@ import {
   assertRejects,
   assertThrows,
 } from "@std/assert";
-import { SchemaValidator } from "@casys/mcp-server";
+import { SchemaValidator } from "@casys/mcp-platform";
 import {
   ASSEMBLY_INTEGRITY_MAXIMUM_BASE64_CHARACTERS,
   ASSEMBLY_INTEGRITY_MAXIMUM_OCCURRENCES,
@@ -216,7 +216,7 @@ backendTest(
       assertEquals(first.kind, "assembly-integrity-observation");
       assertEquals(first.producer, {
         service: "mcp-build123d",
-        packageVersion: "0.6.4",
+        packageVersion: "0.7.0",
         tool: "build123d_observe_assembly_integrity",
         engine: { name: "cadquery-ocp", version: "7.9.3.1" },
       });

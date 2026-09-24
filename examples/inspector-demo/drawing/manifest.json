@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "build123d-inspector-drawing/1.0",
+  "title": "CameraMountBracket — projections et coupe",
+  "project": "inspection-drone-id01",
+  "sourceStep": {
+    "reference": "casys-digital-thread/state/local/thread-assets/b821e5598b75449636eb57d0ea7db48ea560260ce56a6872ebeaec0f7691d201.step",
+    "sha256": "b821e5598b75449636eb57d0ea7db48ea560260ce56a6872ebeaec0f7691d201",
+    "bytes": 48786
+  },
+  "sourceCapture": {
+    "id": "geometry-ae70dd5928700f06d2434f410c15890ca3e1b007b5c781785a27a29d85781a01",
+    "reference": "casys-digital-thread/state/local/geometry-captures/ae70dd5928700f06d2434f410c15890ca3e1b007b5c781785a27a29d85781a01.json",
+    "sha256": "ae70dd5928700f06d2434f410c15890ca3e1b007b5c781785a27a29d85781a01",
+    "bytes": 4636,
+    "producer": "digital-thread/design.write-geometry@1",
+    "runId": "run:id01-queue-camera-bracket-geometry-20260906"
+  },
+  "engine": {
+    "build123d": "0.11.1",
+    "ocp": "7.9.3.1"
+  },
+  "method": {
+    "id": "build123d-step-svg-projection",
+    "version": "1.0"
+  },
+  "views": [
+    {
+      "id": "top",
+      "label": "Dessus",
+      "file": "top.svg",
+      "sha256": "a0b8bed71fb803c8fde83cda826e00f25fc343a503b6febd4208fd69e6577b01",
+      "bytes": 5924
+    },
+    {
+      "id": "front",
+      "label": "Face",
+      "file": "front.svg",
+      "sha256": "49278a843bd96a8d8799563a65d040248336b3a224f2e44367a93261057affb8",
+      "bytes": 3878
+    },
+    {
+      "id": "right",
+      "label": "Droite",
+      "file": "right.svg",
+      "sha256": "9de119499267e6c1c96f048d018cf32357870d0ae4a31881534fe0ff036354c0",
+      "bytes": 15842
+    },
+    {
+      "id": "isometric",
+      "label": "Isométrique",
+      "file": "isometric.svg",
+      "sha256": "50bec9859a74c0b47a252838e984c41d9b28e6b8934d3214e787661a4b740230",
+      "bytes": 6768
+    },
+    {
+      "id": "section-yz",
+      "label": "Coupe YZ",
+      "file": "section-yz.svg",
+      "sha256": "07d740c65ac29acba209f9a8375d7a409898d6b9074ef64ae18f5305f0ceb778",
+      "bytes": 438
+    }
+  ],
+  "envelopeMm": [
+    35.0000002,
+    30.0000002,
+    35.0000002
+  ],
+  "status": "saved-production-projection"
+}

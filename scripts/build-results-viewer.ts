@@ -28,6 +28,8 @@ const importMap = join(temporaryConfigDir, "import-map.json");
 const viewerLock = join(viewer, "deno.lock");
 const builds = [
   { entry: "main.ts", viewer: "results-viewer" },
+  { entry: "assembly-main.ts", viewer: "assembly-viewer" },
+  { entry: "drawing-main.ts", viewer: "drawing-viewer" },
 ] as const;
 const bundles = new Map<string, string>();
 

@@ -12,7 +12,7 @@
  * @module lib/cad/tools/execute
  */
 
-import type { StructuredToolResult } from "@casys/mcp-server";
+import type { StructuredToolResult } from "@casys/mcp-platform";
 import type { CadTool } from "./types.ts";
 import {
   Build123dArtifactError,
@@ -28,6 +28,10 @@ import {
   runCadScript,
 } from "../api/python-bridge.ts";
 import { RESULTS_VIEWER_URI } from "../ui/constants.ts";
+import {
+  BUILD123D_GEOMETRY_EXECUTION_RESULT_SCHEMA,
+  BUILD123D_GEOMETRY_EXPORT_RESULT_SCHEMA,
+} from "../ui/view-app-manifest.ts";
 
 const SCRIPT_DESCRIPTION =
   "build123d Python script. It must assign its final shape to a variable " +
@@ -231,6 +235,7 @@ const FILE_SCHEMA = {
 } as const;
 
 const EXECUTION_OUTPUT_SCHEMA = {
+  $id: BUILD123D_GEOMETRY_EXECUTION_RESULT_SCHEMA,
   type: "object",
   additionalProperties: false,
   required: ["schemaVersion", "kind", "metrics", "files"],
@@ -243,6 +248,7 @@ const EXECUTION_OUTPUT_SCHEMA = {
 } as const;
 
 const EXPORT_OUTPUT_SCHEMA = {
+  $id: BUILD123D_GEOMETRY_EXPORT_RESULT_SCHEMA,
   type: "object",
   additionalProperties: false,
   required: ["schemaVersion", "kind", "metrics", "files"],

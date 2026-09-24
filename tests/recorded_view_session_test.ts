@@ -29,6 +29,10 @@ import {
   MCP_APP_HOST_RESOURCE_READ_TYPE,
 } from "../src/ui/results-viewer/src/resource-bridge.ts";
 import {
+  BUILD123D_ASSEMBLY_RESULT_SCHEMA,
+  BUILD123D_DRAWING_RESULT_SCHEMA,
+  BUILD123D_GEOMETRY_EXECUTION_RESULT_SCHEMA,
+  BUILD123D_GEOMETRY_EXPORT_RESULT_SCHEMA,
   BUILD123D_GEOMETRY_RESULT_SCHEMA,
   BUILD123D_MCP_APP_INFO,
   BUILD123D_VIEW_APP_MANIFEST,
@@ -677,26 +681,43 @@ Deno.test("opaque-origin resource bridge requests only a registered fingerprint"
   assertEquals(portListener, undefined);
 });
 
-Deno.test("Build123d declares a whole-view session resource without mandatory components", () => {
+Deno.test("Build123d declares three whole-view resources and geometry session compatibility", () => {
   assertEquals(BUILD123D_VIEW_APP_MANIFEST, {
     schemaVersion: VIEW_APP_MANIFEST_SCHEMA,
     app: {
       id: "io.casys.mcp-build123d.results",
-      title: "Build123d geometry",
-      version: "0.6.4",
+      title: "Build123d inspection",
+      version: "0.7.0",
     },
-    resources: [{
-      uri: "ui://mcp-build123d/results-viewer",
-      ownership: "whole-view",
-      resultSchemas: [BUILD123D_GEOMETRY_RESULT_SCHEMA],
-      acceptedActions: [VIEWER_SESSION_APPLY_ACTION],
-      sessionSchemas: [
-        BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
-        BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA,
-      ],
-    }],
+    resources: [
+      {
+        uri: "ui://mcp-build123d/results-viewer",
+        ownership: "whole-view",
+        resultSchemas: [
+          BUILD123D_GEOMETRY_EXECUTION_RESULT_SCHEMA,
+          BUILD123D_GEOMETRY_EXPORT_RESULT_SCHEMA,
+        ],
+        acceptedActions: [VIEWER_SESSION_APPLY_ACTION],
+        sessionSchemas: [
+          BUILD123D_RECORDED_VIEW_SESSION_SCHEMA,
+          BUILD123D_GEOMETRY_REVIEW_SESSION_SCHEMA,
+        ],
+      },
+      {
+        uri: "ui://mcp-build123d/assembly-viewer",
+        ownership: "whole-view",
+        resultSchemas: [BUILD123D_ASSEMBLY_RESULT_SCHEMA],
+      },
+      {
+        uri: "ui://mcp-build123d/drawing-viewer",
+        ownership: "whole-view",
+        resultSchemas: [BUILD123D_DRAWING_RESULT_SCHEMA],
+      },
+    ],
   });
-  assertEquals("components" in BUILD123D_VIEW_APP_MANIFEST.resources[0], false);
+  for (const resource of BUILD123D_VIEW_APP_MANIFEST.resources) {
+    assertEquals("components" in resource, false);
+  }
   assertEquals(
     JSON.stringify(BUILD123D_VIEW_APP_MANIFEST).includes("provider"),
     false,
@@ -707,7 +728,7 @@ Deno.test("Build123d declares a whole-view session resource without mandatory co
   });
 });
 
-Deno.test("namespaced geometry result identity maps to the unchanged execution/export wire union", () => {
+Deno.test("geometry output identities preserve the unchanged legacy wire version", () => {
   assertEquals(
     BUILD123D_GEOMETRY_RESULT_SCHEMA,
     "io.casys.mcp-build123d.geometry-result/1.0",
@@ -743,8 +764,15 @@ Deno.test("namespaced geometry result identity maps to the unchanged execution/e
     }
   }
   assertEquals(BUILD123D_VIEW_APP_MANIFEST.resources[0].resultSchemas, [
-    BUILD123D_GEOMETRY_RESULT_SCHEMA,
+    BUILD123D_GEOMETRY_EXECUTION_RESULT_SCHEMA,
+    BUILD123D_GEOMETRY_EXPORT_RESULT_SCHEMA,
   ]);
+  assertEquals(
+    (BUILD123D_VIEW_APP_MANIFEST.resources[0]
+      .resultSchemas as readonly string[])
+      .includes(BUILD123D_GEOMETRY_RESULT_SCHEMA),
+    false,
+  );
 });
 
 Deno.test("direct tool results preserve host-selected surface ownership", () => {
