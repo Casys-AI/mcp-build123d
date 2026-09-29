@@ -235,14 +235,14 @@ container user's authority and can access anything mounted into it.
 
 ### Use with Casys
 
-[Casys Digital Thread](https://github.com/Casys-AI/casys-digital-thread)
-ships a desktop chat that prepares this provider itself: no manual Docker
-or image management. The proved flow (macOS, desktop `0.4.0`) opens a chat
-with Muse as the default agent, enables Build123d from the catalogue,
-produces a first Box geometry, edits it, and reopens the saved work:
+[Casys Digital Thread](https://github.com/Casys-AI/casys-digital-thread) ships a
+desktop chat that prepares this provider itself: no manual Docker or image
+management. The proved flow (macOS, desktop `0.4.0`) opens a chat with Muse as
+the default agent, enables Build123d from the catalogue, produces a first Box
+geometry, edits it, and reopens the saved work:
 [first saved Build123d result](https://github.com/Casys-AI/casys-digital-thread/blob/main/docs/how-to/setup/first-build123d-result.md).
-That guide states the verified versions and the current limitations
-(Muse export viewers included).
+That guide states the verified versions and the current limitations (Muse export
+viewers included).
 
 ## Security and trust boundary
 
