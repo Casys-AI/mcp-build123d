@@ -209,6 +209,11 @@ async function withMissingPython(fn: () => Promise<void>): Promise<void> {
 }
 
 Deno.test("2D projection schemas keep exclusive digest-bound STEP forms and fixed output bounds", async () => {
+  assertEquals(PROJECTION_2D_INPUT_SCHEMA.type, "object");
+  const inputProperties = Object.keys(
+    PROJECTION_2D_INPUT_SCHEMA.properties as Record<string, unknown>,
+  ).sort();
+  assertEquals(inputProperties, ["includeSection", "step", "stepResource"]);
   const validator = new SchemaValidator();
   validator.addSchema("projection-input", PROJECTION_2D_INPUT_SCHEMA);
   validator.addSchema("projection-output", PROJECTION_2D_OUTPUT_SCHEMA);
@@ -232,7 +237,22 @@ Deno.test("2D projection schemas keep exclusive digest-bound STEP forms and fixe
   };
   assertEquals(validator.validate("projection-input", inline).valid, true);
   assertEquals(validator.validate("projection-input", resource).valid, true);
+  assertEquals(
+    validator.validate("projection-input", {
+      ...resource,
+      includeSection: true,
+    }).valid,
+    true,
+  );
+  assertEquals(
+    validator.validate("projection-input", { step: inline.step }).valid,
+    true,
+  );
   assertEquals(validator.validate("projection-input", {}).valid, false);
+  assertEquals(
+    validator.validate("projection-input", { includeSection: true }).valid,
+    false,
+  );
   assertEquals(
     validator.validate("projection-input", { ...inline, ...resource }).valid,
     false,
@@ -275,6 +295,42 @@ Deno.test("2D projection schemas keep exclusive digest-bound STEP forms and fixe
   assertStringIncludes(
     views.description,
     String(PROJECTION_2D_MAXIMUM_TOTAL_SVG_BYTES),
+  );
+});
+
+Deno.test("2D projection enforces exactly one STEP variant server-side", async () => {
+  const digest = await sha256Hex(PART21_STEP);
+  const step = {
+    mimeType: "model/step",
+    sha256: digest,
+    bytes: PART21_STEP.byteLength,
+    blob: PART21_STEP.toBase64(),
+  };
+  const stepResource = {
+    uri: `casys://build123d/artifacts/${digest}.step`,
+    mimeType: "model/step",
+    sha256: digest,
+    bytes: PART21_STEP.byteLength,
+  };
+  await assertRejects(
+    () => projectStep2d({}),
+    Projection2dInputError,
+    "exactly one of step or stepResource",
+  );
+  await assertRejects(
+    () => projectStep2d({ includeSection: true }),
+    Projection2dInputError,
+    "exactly one of step or stepResource",
+  );
+  await assertRejects(
+    () => projectStep2d({ step, stepResource }),
+    Projection2dInputError,
+    "exactly one of step or stepResource",
+  );
+  await assertRejects(
+    () => projectStep2d({ step, stepResource, includeSection: true }),
+    Projection2dInputError,
+    "exactly one of step or stepResource",
   );
 });
 
