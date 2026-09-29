@@ -77,37 +77,22 @@ const STEP_RESOURCE_SCHEMA = {
   },
 } as const;
 
+const INCLUDE_SECTION_SCHEMA = {
+  type: "boolean",
+  default: false,
+  description:
+    "Attempt the fixed YZ section at the source envelope midpoint. It is omitted when that plane contains no face.",
+} as const;
+
 export const PROJECTION_2D_INPUT_SCHEMA: Record<string, unknown> = {
-  oneOf: [
-    {
-      type: "object",
-      additionalProperties: false,
-      required: ["step"],
-      properties: {
-        step: INLINE_STEP_SCHEMA,
-        includeSection: {
-          type: "boolean",
-          default: false,
-          description:
-            "Attempt the fixed YZ section at the source envelope midpoint. It is omitted when that plane contains no face.",
-        },
-      },
-    },
-    {
-      type: "object",
-      additionalProperties: false,
-      required: ["stepResource"],
-      properties: {
-        stepResource: STEP_RESOURCE_SCHEMA,
-        includeSection: {
-          type: "boolean",
-          default: false,
-          description:
-            "Attempt the fixed YZ section at the source envelope midpoint. It is omitted when that plane contains no face.",
-        },
-      },
-    },
-  ],
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    step: INLINE_STEP_SCHEMA,
+    stepResource: STEP_RESOURCE_SCHEMA,
+    includeSection: INCLUDE_SECTION_SCHEMA,
+  },
+  oneOf: [{ required: ["step"] }, { required: ["stepResource"] }],
 } as const;
 
 const SVG_SCHEMA = {
