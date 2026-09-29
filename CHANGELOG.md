@@ -2,6 +2,15 @@
 
 All notable changes to `@casys/mcp-build123d` will be documented in this file.
 
+## [0.7.1] - 2026-09-29
+
+- **Claude-compatible `project_2d` schema.** The `build123d_project_2d` input
+  schema now declares `type: object` at the top level, with the `step` and
+  `stepResource` variants as optional properties and a nested `oneOf` on
+  `required`. The previous top-level `oneOf` made strict clients drop every tool
+  of the server. Accepted payloads are unchanged and the exactly-one server
+  guard still enforces variant exclusivity.
+
 ## [0.7.0] - 2026-09-24
 
 - **MCP Platform package name.** Direct framework imports now use the canonical
